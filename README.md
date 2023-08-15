@@ -16,7 +16,7 @@ The algorithm is provided as a single header-only library, and requires
 
 ## Example usage
 ```
-#include "constrained_miniball.h"
+#include "ConstrainedMiniball.h"
 #include <Eigen/Dense>
 #include <iostream>
 
