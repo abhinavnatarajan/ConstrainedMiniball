@@ -136,7 +136,7 @@ namespace cmb {
     tuple<RealVector<typename DX::Scalar>, typename DX::Scalar, bool> constrained_miniball(
     const int d,
     const Eigen::MatrixBase<DX>& X,
-    const Eigen::MatrixBase<DA>& A, 
+    const Eigen::MatrixBase<DA>& A,
     const Eigen::MatrixBase<Db>& b) {
         #ifndef NDEBUG
             static_assert(Db::ColsAtCompileTime == 1, "b must be a column vector");
@@ -161,7 +161,36 @@ namespace cmb {
             flag &= (A * centre).isApprox(b);
         }
         return tuple{centre, sqRadius, flag};
-    } 
+    }
+
+    /* MINIBALL ALGORITHM 
+    Returns the sphere of minimum radius that bounds all points in X. 
+
+    INPUTS: 
+    -   d is the dimension of the ambient space.
+    -   X is a vector of points in R^d.
+    We refer to the scalar type of X as Real_t.
+    If Real_t is not a standard floating-point type, Eigen support for the type must be added.
+    See https://eigen.tuxfamily.org/dox/TopicCustomizing_CustomScalar.html for details.
+
+    RETURNS: 
+    std::tuple with the following elements (in order):
+    -   a column vector with Real_t entries that is the centre of the sphere of minimum radius 
+        bounding every point in X. 
+    -   the squared radius of the bounding sphere as a Real_t scalar.
+    -   a boolean flag that is true if the solution is known to be correct to within machine precision.
+
+    */
+    template <class DX>
+    tuple<RealVector<typename DX::Scalar>, typename DX::Scalar, bool> miniball(
+    const int d,
+    const Eigen::MatrixBase<DX>& X) {
+        typedef DX::Scalar Real_t;
+        return constrained_miniball(
+            d, X, 
+            Eigen::Matrix<Real_t, Eigen::Dynamic, Eigen::Dynamic>(0, d), 
+            RealVector<Real_t>(0));
+    }
 }
 
 #endif
