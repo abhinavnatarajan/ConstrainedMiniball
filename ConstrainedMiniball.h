@@ -1,12 +1,36 @@
-/* 
-Copyright 2023 Abhinav Natarajan
+/*
+    This file is part of ConstrainedMiniball.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+    ConstrainedMiniball: Smallest Enclosing Ball with Linear Constraints.
+    Based on: E. Welzl, “Smallest enclosing disks (balls and ellipsoids),” 
+    in New Results and New Trends in Computer Science, H. Maurer, Ed., 
+    in Lecture Notes in Computer Science. Berlin, Heidelberg: Springer, 
+    1991, pp. 359–370. doi: 10.1007/BFb0038202.
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+    Project homepage:    http://github.com/abhinavnatarajan/ConstrainedMiniball
 
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+    Copyright (c) 2023 Abhinav Natarajan
 
+    Contributors:
+    Abhinav Natarajan
+
+    Licensing:
+    ConstrainedMiniball is released under the GNU Lesser General Public License ("LGPL").
+
+    GNU Lesser General Public License ("LGPL") copyright permissions statement:
+    **************************************************************************
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 #pragma once
 #ifndef CONSTRAINED_MINIBALL_H
@@ -18,6 +42,9 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
 #include <algorithm>
 #include <random>
 #include <type_traits>
+#if __has_include(<mpfr.h>)
+    #include <unsupported/Eigen/MPRealSupport>
+#endif
 
 namespace cmb {
     using std::tuple, std::vector;
@@ -26,23 +53,37 @@ namespace cmb {
     using RealVector = Eigen::Matrix<Real_t, Eigen::Dynamic, 1>;
 
     template <class Real_t>
+    using RealMatrix = Eigen::Matrix<Real_t, Eigen::Dynamic, Eigen::Dynamic>;
+    
+    template <class Derived, class Real_t>
+    concept RealMatrixXpr = requires { typename Eigen::MatrixBase<Derived>; } &&
+        std::is_same<typename Derived::Scalar, Real_t>::value;
+    
+    template <class Derived, class Real_t>
+    concept RealVectorXpr = RealMatrixXpr<Derived, Real_t> && Derived::ColsAtCompileTime == 1;
+
+    template <class Derived>
+    concept FloatMatrixXpr = RealMatrixXpr<Derived, float> || RealMatrixXpr<Derived, double>;
+
+    template <class Derived>
+    concept FloatVectorXpr = RealVectorXpr<Derived, float> || RealVectorXpr<Derived, double>;
+
+    template <class Real_t>
     class ConstrainedMiniballHelper {
         int num_points, num_linear_constraints, rank, dim;
-        Eigen::Matrix<Real_t, Eigen::Dynamic, Eigen::Dynamic> M;
+        RealMatrix<Real_t> M;
         RealVector<Real_t> p0, v;
 
         public:
 
-        template <class DA, class Db>
-        ConstrainedMiniballHelper(int dimension, const Eigen::MatrixBase<DA>& A, const Eigen::MatrixBase<Db>& b) : 
+        template <RealMatrixXpr<Real_t> A_t, RealVectorXpr<Real_t> b_t>
+        ConstrainedMiniballHelper(int dimension, const Eigen::MatrixBase<A_t>& A, const Eigen::MatrixBase<b_t>& b) : 
         num_points(0), 
         num_linear_constraints(A.rows()), 
         dim(dimension), 
         p0(RealVector<Real_t>::Zero(dim)) {
-            #ifndef NDEBUG
-                assert(A.cols() == dim);
-                assert(A.rows() == b.rows());
-            #endif
+            assert(A.cols() == dim);
+            assert(A.rows() == b.rows());
             M = A.eval();
             v = b.eval();
             if (M.rows() > 0) {
@@ -50,11 +91,10 @@ namespace cmb {
             }
         }
 
-        void add_point(RealVector<Real_t>& p) {
+        template <RealVectorXpr<Real_t> T>
+        void add_point(T& p) {
             if (num_points == 0) {
-                #ifndef NDEBUG
-                    assert(p.rows() == dim);
-                #endif
+                assert(p.rows() == dim);
                 p0 = p;
             }
             else {
@@ -107,7 +147,7 @@ namespace cmb {
         }
         RealVector<Real_t> p = X.back();
         X.pop_back();
-        auto [centre, sqRadius, flag] = _constrained_miniball(X, helper);
+        auto [centre, sqRadius, success] = _constrained_miniball(X, helper);
         if ((p - centre).squaredNorm() > sqRadius) {
             helper.add_point(p);
             auto t = _constrained_miniball(X, helper);
@@ -117,7 +157,7 @@ namespace cmb {
         }
         else {
             X.push_back(p);
-            return tuple{centre, sqRadius, flag};
+            return tuple{centre, sqRadius, success};
         }
     }
 
@@ -131,9 +171,7 @@ namespace cmb {
     -   X is a vector of points in R^d.
     -   A is a (m x d) matrix with m <= d.
     -   b is a vector in R^m such that Ax = b defines an affine subspace of R^d. 
-    X, A, and b must have the same scalar type, which we refer to as Real_t.
-    If Real_t is not a standard floating-point type, Eigen support for the type must be added.
-    See https://eigen.tuxfamily.org/dox/TopicCustomizing_CustomScalar.html for details.
+    X, A, and b must have the same scalar type Real_t, which must be a standard floating-point type.
 
     RETURNS: 
     std::tuple with the following elements (in order):
@@ -143,35 +181,44 @@ namespace cmb {
     -   a boolean flag that is true if the solution is known to be correct to within machine precision.
 
     */
-    template <class DX, class DA, class Db>
-    tuple<RealVector<typename DX::Scalar>, typename DX::Scalar, bool> constrained_miniball(
+    template <FloatMatrixXpr X_t, FloatMatrixXpr A_t, FloatVectorXpr b_t>
+    tuple<RealVector<typename X_t::Scalar>, typename X_t::Scalar, bool> constrained_miniball(
     const int d,
-    const Eigen::MatrixBase<DX>& X,
-    const Eigen::MatrixBase<DA>& A,
-    const Eigen::MatrixBase<Db>& b) {
-        #ifndef NDEBUG
-            static_assert(Db::ColsAtCompileTime == 1, "b must be a column vector");
-            static_assert(std::is_same<DA::Scalar, DX::Scalar>::value, "A and X must have the same type of scalars.");
-            static_assert(std::is_same<Db::Scalar, DX::Scalar>::value, "b and X must have the same type of scalars.");
-            assert(A.rows() == b.rows());
-            assert(d == X.rows());
-            assert(d == A.cols());
+    const Eigen::MatrixBase<X_t>& X,
+    const Eigen::MatrixBase<A_t>& A,
+    const Eigen::MatrixBase<b_t>& b) {
+
+        assert(A.rows() == b.rows());
+        assert(d == X.rows());
+        assert(d == A.cols());
+
+        typedef X_t::Scalar Float_t;
+        #if __has_include(<mpfr.h>)
+            typedef mpfr::mpreal Real_t;
+            mpfr::mpreal::set_default_prec(mpfr::digits2bits(25));
+        #else
+            typedef Float_t Real_t;
         #endif
-        vector<RealVector<typename DX::Scalar>> X_vec;
+
+        vector<RealVector<Real_t>> X_vec;
         for(auto i = 0; i < X.cols(); i++) {
-            X_vec.push_back(X.col(i));
+            X_vec.push_back(X.col(i).cast<Real_t>());
         }
         std::random_device rd;
         std::shuffle(X_vec.begin(), X_vec.end(), rd);
-        ConstrainedMiniballHelper<typename DX::Scalar> helper(d, A, b);
-        auto [centre, sqRadius, flag] = _constrained_miniball(X_vec, helper);
-        if (flag) {
+
+        ConstrainedMiniballHelper<Real_t> helper(d, A.cast<Real_t>(), b.cast<Real_t>());
+
+        auto [centre, sqRadius, success] = _constrained_miniball(X_vec, helper);
+        RealVector<Float_t> centre_f = centre.cast<Float_t>();
+        Float_t sqRadius_f = static_cast<Float_t>(sqRadius);
+        if (success) {
             for(size_t i = 0; i < X.cols(); i++) {
-                flag &= (centre - X.col(i)).squaredNorm() <= sqRadius;
+                success &= (centre_f - X.col(i)).squaredNorm() <= sqRadius_f;
             }
-            flag &= (A * centre).isApprox(b);
+            success &= (A * centre_f).isApprox(b);
         }
-        return tuple{centre, sqRadius, flag};
+        return tuple{centre_f, sqRadius_f, success};
     }
 
     /* MINIBALL ALGORITHM 
@@ -180,9 +227,7 @@ namespace cmb {
     INPUTS: 
     -   d is the dimension of the ambient space.
     -   X is a vector of points in R^d.
-    We refer to the scalar type of X as Real_t.
-    If Real_t is not a standard floating-point type, Eigen support for the type must be added.
-    See https://eigen.tuxfamily.org/dox/TopicCustomizing_CustomScalar.html for details.
+    We refer to the scalar type of X as Real_t, which must be a standard floating-point type.
 
     RETURNS: 
     std::tuple with the following elements (in order):
@@ -190,17 +235,16 @@ namespace cmb {
         bounding every point in X. 
     -   the squared radius of the bounding sphere as a Real_t scalar.
     -   a boolean flag that is true if the solution is known to be correct to within machine precision.
-
     */
-    template <class DX>
-    tuple<RealVector<typename DX::Scalar>, typename DX::Scalar, bool> miniball(
+    template <FloatMatrixXpr X_t>
+    tuple<RealVector<typename X_t::Scalar>, typename X_t::Scalar, bool> miniball(
     const int d,
-    const Eigen::MatrixBase<DX>& X) {
-        typedef DX::Scalar Real_t;
+    const Eigen::MatrixBase<X_t>& X) {
+        typedef X_t::Scalar Float_t;
         return constrained_miniball(
             d, X, 
-            Eigen::Matrix<Real_t, Eigen::Dynamic, Eigen::Dynamic>(0, d), 
-            RealVector<Real_t>(0));
+            RealMatrix<Float_t>(0, d), 
+            RealVector<Float_t>(0));
     }
 }
 

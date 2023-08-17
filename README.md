@@ -9,44 +9,14 @@ The problem can be solved in amortised $O(n)$ time by using Welzl's algorithm, w
 
 ## Installation and requirements
 The algorithm is provided as a single header-only library, and requires
-- C++17 or later 
-- The [Eigen C++ library](https://eigen.tuxfamily.org/index.php?title=Main_Page) (tested with version 3.4.0) 
+- C++20 compliant compiler with support for concepts (GCC 10.3 or later or later, MSVC 2019 16.3 or later).
+- The [Eigen C++ library](https://eigen.tuxfamily.org/index.php?title=Main_Page) (tested with version 3.4.0).
+
+### Optional Dependencies
+- The [GNU MP Library](https://gmplib.org/) (tested with version 6.3.0) and the [GNU MPFR Library](https://www.mpfr.org/) (tested with version 4.2.0) for exact geometric computation.
 
 ## Example usage
-```
-#include "ConstrainedMiniball.h"
-#include <Eigen/Dense>
-#include <iostream>
-
-using std::cout, std::cin, std::endl;
-using cmb::constrained_miniball, cmb::miniball;
-
-int main() {
-    Eigen::MatrixXd X {
-        {0.5, 1.0, -1.0}, 
-        {1.0, 0.0, 0.0}, 
-        {1.0, 0.0, 0.0}};
-    Eigen::MatrixXd A {
-        {0.0, 0.0, 1.0}, 
-        {0, 1.0, 0.0}};
-    Eigen::VectorXd b {{1.0, 1.0}};
-    auto [centre, sqRadius, flag] = constrained_miniball(3, X, A, b);
-    cout << "Constrained miniball problem" << endl;
-    cout << "Solution found: " << (flag ? "yes" : "no") << endl;
-    cout << "Centre: ";
-    cout << centre.transpose().eval() << endl;
-    cout << "Squared radius: " << sqRadius << endl;
-    auto [centre, sqRadius, flag] = miniball(3, X, A, b);
-    cout << "Unconstrained miniball problem" << endl;
-    cout << "Solution found: " << (flag ? "yes" : "no") << endl;
-    cout << "Centre: ";
-    cout << centre.transpose().eval() << endl;
-    cout << "Squared radius: " << sqRadius << endl;
-    size_t t;
-    cin >> t;
-    return 0;
-}
-```
+See `example.cpp` for examples.
 
 ## References
 
