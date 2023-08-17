@@ -37,15 +37,18 @@
 #include <Eigen/Dense>
 #include <cmath>
 #include <numbers>
+#include <tuple>
 
 using std::cout, std::endl, std::cin;
 
 int main() {
+    // 3 equidistant points on the circle in the xy-plane in 3D
     Eigen::MatrixXd X {
         {1.0, -0.5, -0.5},
         {0.0, std::sin(2 * std::numbers::pi / 3), std::sin(4 * std::numbers::pi / 3)},
         {0.0, 0.0, 0.0}
     }, 
+    // Ax = b define the z=1 plane
     A {
         {0.0, 0.0, 1.0}
     };
@@ -54,6 +57,21 @@ int main() {
     cout << "Solution found: " << (success ? "true" : "false") << endl;
     cout << "Centre : " << centre.transpose().eval() << endl;
     cout << "Squared radius : " << sqRadius << endl;
+
+    // Try an edge case 
+    // Same points in 2D
+    X.conservativeResize(2, Eigen::NoChange);
+    // Ax = b is only satisfied by x = (0, 0)^T
+    A = Eigen::MatrixXd{ 
+        {1.0, 0.0},
+        {0.0, 1.0}
+    };
+    b = Eigen::VectorXd{{0.0, 0.0}};
+    std::tie(centre, sqRadius, success) = cmb::constrained_miniball(2, X, A, b);
+    cout << "Solution found: " << (success ? "true" : "false") << endl;
+    cout << "Centre : " << centre.transpose().eval() << endl;
+    cout << "Squared radius : " << sqRadius << endl;
+
     int t;
     cin >> t;
     return 0;
