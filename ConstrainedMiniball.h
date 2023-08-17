@@ -42,7 +42,8 @@
 #include <algorithm>
 #include <random>
 #include <type_traits>
-#if __has_include(<mpfr.h>)
+#if __has_include(<mpfr.h>) && !defined CMB_NO_MPFR
+    #define CMB_USE_MPFR
     #include <unsupported/Eigen/MPRealSupport>
 #endif
 
@@ -193,7 +194,7 @@ namespace cmb {
         assert(d == A.cols());
 
         typedef X_t::Scalar Float_t;
-        #if __has_include(<mpfr.h>)
+        #ifdef CMB_USE_MPFR
             typedef mpfr::mpreal Real_t;
             mpfr::mpreal::set_default_prec(mpfr::digits2bits(25));
         #else
