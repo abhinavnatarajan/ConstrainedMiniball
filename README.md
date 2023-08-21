@@ -1,5 +1,5 @@
 # Constrained Smallest Enclosing Ball Algorithm
-This is a C++ implementation of Emo Welzl's algorithm [[1]](#bib1) to find the smallest bounding ball of a point set in Euclidean space, with modifications to allow linear constraints on the centre of the bounding ball. 
+This is a C++ implementation of Emo Welzl's algorithm [[1]](#bib1) to find the smallest bounding ball of a point set in Euclidean space, with modifications to allow affine constraints on the centre of the bounding ball. 
 
 Given $X = \{x_1, \ldots, x_n\} \subset \mathbb{R}^d$ and an affine subspace $E \subset \mathbb{R}^d$, we wish to find
 ```math
@@ -19,6 +19,11 @@ The algorithm is provided as a single header-only library, and requires
 
 ## Example usage
 See `example.cpp` for examples.
+
+## License
+Copyright (c) 2023 Abhinav Natarajan.
+
+ConstrainedMiniball is released under the GNU Lesser General Public License ("LGPL").
 
 ## References
 

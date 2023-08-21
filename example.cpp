@@ -1,7 +1,7 @@
 /*
     This file is part of ConstrainedMiniball.
 
-    ConstrainedMiniball: Smallest Enclosing Ball with Linear Constraints.
+    ConstrainedMiniball: Smallest Enclosing Ball with Affine Constraints.
     Based on: E. Welzl, “Smallest enclosing disks (balls and ellipsoids),” 
     in New Results and New Trends in Computer Science, H. Maurer, Ed., 
     in Lecture Notes in Computer Science. Berlin, Heidelberg: Springer, 
@@ -40,6 +40,20 @@
 #include <tuple>
 
 using std::cout, std::endl, std::cin;
+using namespace cmb;
+
+template <class Derived>
+tuple<RealMatrix<typename Derived::Scalar>, RealVector<typename Derived::Scalar>> equidistant_subspace(const Eigen::MatrixBase<Derived>& X) {
+    int n = X.cols();
+    typedef Derived::Scalar Real_t;
+    RealMatrix<Real_t> E(n-1, X.rows());
+    RealVector<Real_t> b(n-1);
+    if (n > 1) {
+        b = (X.rightCols(n-1).colwise().squaredNorm().array() - X.col(0).squaredNorm()).transpose();
+        E = (X.rightCols(n-1).colwise() - X.col(0)).transpose();
+    }
+    return tuple{E, b};
+}
 
 int main() {
     // 3 equidistant points on the circle in the xy-plane in 3D
@@ -53,7 +67,7 @@ int main() {
         {0.0, 0.0, 1.0}
     };
     Eigen::VectorXd b { {1.0} };
-    auto [centre, sqRadius, success] = cmb::constrained_miniball(3, X, A, b);
+    auto [centre, sqRadius, success] = cmb::constrained_miniball<double>(3, X, A, b);
     cout << "Solution found: " << (success ? "true" : "false") << endl;
     cout << "Centre : " << centre.transpose().eval() << endl;
     cout << "Squared radius : " << sqRadius << endl;
@@ -61,13 +75,9 @@ int main() {
     // Try an edge case 
     // Same points in 2D
     X.conservativeResize(2, Eigen::NoChange);
-    // Ax = b is only satisfied by x = (0, 0)^T
-    A = Eigen::MatrixXd{ 
-        {1.0, 0.0},
-        {0.0, 1.0}
-    };
-    b = Eigen::VectorXd{{0.0, 0.0}};
-    std::tie(centre, sqRadius, success) = cmb::constrained_miniball(2, X, A, b);
+    // Set A, b to manually define the subspace equidistant from points in X
+    std::tie(A, b) = equidistant_subspace(X);
+    std::tie(centre, sqRadius, success) = cmb::constrained_miniball<double>(2, X, A, b);
     cout << "Solution found: " << (success ? "true" : "false") << endl;
     cout << "Centre : " << centre.transpose().eval() << endl;
     cout << "Squared radius : " << sqRadius << endl;

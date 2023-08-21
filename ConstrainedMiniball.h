@@ -1,7 +1,7 @@
 /*
     This file is part of ConstrainedMiniball.
 
-    ConstrainedMiniball: Smallest Enclosing Ball with Linear Constraints.
+    ConstrainedMiniball: Smallest Enclosing Ball with Affine Constraints.
     Based on: E. Welzl, “Smallest enclosing disks (balls and ellipsoids),” 
     in New Results and New Trends in Computer Science, H. Maurer, Ed., 
     in Lecture Notes in Computer Science. Berlin, Heidelberg: Springer, 
@@ -51,6 +51,19 @@
         #include <unsupported/Eigen/MPRealSupport>
     #endif
 #endif
+#ifndef NDEBUG
+    #include <iostream>
+    #include <string>
+    #include <sstream>
+    template <typename T>
+    std::string to_string_with_precision(const T a_value, const int n = 18)
+    {
+        std::ostringstream out;
+        out.precision(n);
+        out << std::fixed << a_value;
+        return std::move(out).str();
+    }
+#endif
 
 namespace cmb {
     using std::tuple, std::vector, Eigen::MatrixBase, Eigen::Matrix, Eigen::Index;
@@ -60,38 +73,44 @@ namespace cmb {
 
     template <class Real_t>
     using RealMatrix = Matrix<Real_t, Eigen::Dynamic, Eigen::Dynamic>;
+
+    template <class Derived> 
+    concept MatrixXpr = requires { typename MatrixBase<Derived>; };
+
+    template <class Derived> 
+    concept VectorXpr = requires { typename MatrixBase<Derived>; } && Derived::ColsAtCompileTime == 1;
     
     template <class Derived, class Real_t>
-    concept RealMatrixXpr = requires { typename MatrixBase<Derived>; } &&
-        std::is_same<typename Derived::Scalar, Real_t>::value;
+    concept RealMatrixXpr = MatrixXpr<Derived> && std::same_as<typename Derived::Scalar, Real_t>;
     
     template <class Derived, class Real_t>
-    concept RealVectorXpr = RealMatrixXpr<Derived, Real_t> && Derived::ColsAtCompileTime == 1;
+    concept RealVectorXpr = VectorXpr<Derived> && std::same_as<typename Derived::Scalar, Real_t>;
 
-    template <class Derived>
-    concept FloatMatrixXpr = RealMatrixXpr<Derived, float> || RealMatrixXpr<Derived, double>;
-
-    template <class Derived>
-    concept FloatVectorXpr = RealVectorXpr<Derived, float> || RealVectorXpr<Derived, double>;
+    template <class T>
+    concept FloatType = std::same_as<T, float> || std::same_as<T, double> || std::same_as<T, long double>;
 
     template <class Real_t>
     class ConstrainedMiniballHelper {
         int num_points, num_linear_constraints, dim;
         RealMatrix<Real_t> M;
         RealVector<Real_t> p0, v;
+        Real_t tol;
 
         public:
 
         template <RealMatrixXpr<Real_t> A_t, RealVectorXpr<Real_t> b_t>
-        ConstrainedMiniballHelper(int dimension, const MatrixBase<A_t>& A, const MatrixBase<b_t>& b) : 
-        num_points(0), 
-        num_linear_constraints(A.rows()), 
-        dim(dimension), 
-        p0(RealVector<Real_t>::Zero(dim)) {
-            assert(A.cols() == dim);
-            assert(A.rows() == b.rows());
-            M = A.eval();
-            v = b.eval();
+        ConstrainedMiniballHelper(
+            int dimension, const MatrixBase<A_t>& A, const MatrixBase<b_t>& b, Real_t tol) : 
+            num_points(0), 
+            num_linear_constraints(A.rows()), 
+            dim(dimension), 
+            p0(RealVector<Real_t>::Zero(dim)),
+            tol(tol)
+            {
+                assert(A.cols() == dim);
+                assert(A.rows() == b.rows());
+                M = A.eval();
+                v = b.eval();
         }
 
         template <RealVectorXpr<Real_t> T>
@@ -122,11 +141,11 @@ namespace cmb {
             return dim - M.completeOrthogonalDecomposition().rank();;
         }
 
-        tuple<RealVector<Real_t>, Real_t, bool> solve() const {
+        tuple<RealVector<Real_t>, bool> solve() const {
             if (num_linear_constraints == 0 && num_points <= 1) {
                 // note that the program logic guarantees that p0 = 0 if num_points == 0
                 // so the following is valid
-                return tuple{p0, static_cast<Real_t>(0), true};
+                return tuple{p0, true};
             }
             else {
                 RealVector<Real_t> rhs(M.rows());
@@ -134,7 +153,7 @@ namespace cmb {
                 rhs << v - M.topRows(num_linear_constraints) * p0, 
                     0.5 * M.bottomRows(M.rows() - num_linear_constraints).rowwise().squaredNorm();
                 RealVector<Real_t> c = M.completeOrthogonalDecomposition().pseudoInverse() * rhs;
-                return tuple{(c + p0).eval(), static_cast<Real_t>(c.squaredNorm()), (M * c).isApprox(rhs)};
+                return tuple{(c + p0).eval(), (M * c - rhs).isZero(tol)};
             }
         }
     };
@@ -142,23 +161,33 @@ namespace cmb {
     template <class Real_t, RealMatrixXpr<Real_t> T>
     tuple<RealVector<Real_t>, Real_t, bool> _constrained_miniball(
     const MatrixBase<T>& points,
-    vector<Index>& idx, 
+    vector<Index>& X_idx, 
+    vector<Index>& Y_idx, 
     ConstrainedMiniballHelper<Real_t>& helper) {
-        if (idx.size() == 0 || helper.subspace_rank() == 0) {
-            return helper.solve();
+        if (X_idx.size() == 0 || helper.subspace_rank() == 0) {
+            auto [centre, success] = helper.solve();
+            if (Y_idx.size() == 0) {
+                return tuple{centre, static_cast<Real_t>(0), success};
+            }
+            else {
+                Real_t sqRadius = (points(Eigen::all, Y_idx).colwise() - centre).colwise().squaredNorm().maxCoeff();
+                return tuple{centre, sqRadius, success};
+            }
         }
-        Index i = idx.back();
-        idx.pop_back();
-        auto [centre, sqRadius, success] = _constrained_miniball(points, idx, helper);
+        Index i = X_idx.back();
+        X_idx.pop_back();
+        auto [centre, sqRadius, success] = _constrained_miniball(points, X_idx, Y_idx, helper);
         if ((points.col(i) - centre).squaredNorm() > sqRadius) {
             helper.add_point(points.col(i));
-            auto t = _constrained_miniball(points, idx, helper);
+            Y_idx.push_back(i);
+            auto t = _constrained_miniball(points, X_idx, Y_idx, helper);
             helper.remove_last_point();
-            idx.push_back(i);
+            Y_idx.pop_back();
+            X_idx.push_back(i);
             return t;
         }
         else {
-            idx.push_back(i);
+            X_idx.push_back(i);
             return tuple{centre, sqRadius, success};
         }
     }
@@ -170,21 +199,24 @@ namespace cmb {
 
     INPUTS: 
     -   d is the dimension of the ambient space.
-    -   X is a vector of points in R^d.
+    -   X is a matrix whose columns are points in R^d.
     -   A is a (m x d) matrix with m <= d.
     -   b is a vector in R^m such that Ax = b defines an affine subspace of R^d. 
-    X, A, and b must have the same scalar type Real_t, which must be a standard floating-point type.
+    X, A, and b must have the same scalar type Float_t, which must be a standard floating-point type.
 
     RETURNS: 
     std::tuple with the following elements (in order):
-    -   a column vector with Real_t entries that is the centre of the sphere of minimum radius 
+    -   a column vector with Float_t entries that is the centre of the sphere of minimum radius 
         bounding every point in X. 
-    -   the squared radius of the bounding sphere as a Real_t scalar.
+    -   the squared radius of the bounding sphere as a Float_t scalar.
     -   a boolean flag that is true if the solution is known to be correct to within machine precision.
 
+    REMARK:
+    The result returned by this function defines a sphere that is guaranteed to bound all points in the input set. Due to the limits of floating-point computation, it is not theoretically guaranteed that this is the smallest sphere possible. In practice the error in the radius and coordinates of the centre are on the order of magnitude of 1e-5 for float, 1e-12 for double, and 1e-15 for long double.
+
     */
-    template <FloatMatrixXpr X_t, FloatMatrixXpr A_t, FloatVectorXpr b_t>
-    tuple<RealVector<typename X_t::Scalar>, typename X_t::Scalar, bool> constrained_miniball(
+    template <FloatType Float_t, RealMatrixXpr<Float_t> X_t, RealMatrixXpr<Float_t> A_t, RealVectorXpr<Float_t> b_t>
+    tuple<RealVector<Float_t>, Float_t, bool> constrained_miniball(
     const int d,
     const MatrixBase<X_t>& X,
     const MatrixBase<A_t>& A,
@@ -194,43 +226,43 @@ namespace cmb {
         assert(d == X.rows());
         assert(d == A.cols());
 
-        typedef X_t::Scalar Float_t;
         #ifdef CMB_USE_MPFR
-            constexpr int digits_precision = 25;
+            constexpr int digits_precision = std::numeric_limits<Float_t>::digits10 + 10;
             typedef mpfr::mpreal Real_t;
             mpfr::mpreal::set_default_prec(mpfr::digits2bits(digits_precision));
         #else
             typedef Float_t Real_t;
         #endif
-
-        ConstrainedMiniballHelper<Real_t> helper(d, A.cast<Real_t>(), b.cast<Real_t>());
-
-        vector<Index> idx(X.cols());
-        std::iota(idx.begin(), idx.end(), static_cast<Index>(0));
-
+        Real_t tol = static_cast<Real_t>(Eigen::NumTraits<Float_t>::dummy_precision());
+        ConstrainedMiniballHelper<Real_t> helper(d, A.cast<Real_t>(), b.cast<Real_t>(), tol);
+        
         const RealMatrix<Real_t> points = X.cast<Real_t>();
         RealVector<Real_t> centre(d);
         Real_t sqRadius;
+        RealVector<Float_t> centre_f(d);
+        Float_t sqRadius_f;
         bool success;
 
         if (helper.subspace_rank() == 0) {
-            std::tie(centre, std::ignore, success) = helper.solve();
-            sqRadius = (points.colwise() - centre).colwise().squaredNorm().maxCoeff();
+            std::tie(centre, success) = helper.solve();
+            centre_f = centre.cast<Float_t>();
+            sqRadius_f = (X.colwise() - centre_f).colwise().squaredNorm().maxCoeff();
         }
         else {
+            vector<Index> X_idx(X.cols()), Y_idx;
             std::random_device rd;
-            std::shuffle(idx.begin(), idx.end(), rd);
-            std::tie(centre, sqRadius, success) = _constrained_miniball(points, idx, helper);
+            std::iota(X_idx.begin(), X_idx.end(), static_cast<Index>(0));
+            std::shuffle(X_idx.begin(), X_idx.end(), rd);
+            std::tie(centre, sqRadius, success) = _constrained_miniball(points, X_idx, Y_idx, helper);
+            centre_f = centre.cast<Float_t>();
+            if (std::is_same<Float_t, Real_t>::value) {
+                sqRadius_f = static_cast<Float_t>(sqRadius);
+            }
+            else {
+                sqRadius_f = (X.colwise() - centre_f).colwise().squaredNorm().maxCoeff();
+            }
         }
         
-        RealVector<Float_t> centre_f = centre.cast<Float_t>();
-        Float_t sqRadius_f = static_cast<Float_t>(sqRadius);
-        if (success) {
-            for(size_t i = 0; i < X.cols(); i++) {
-                success &= (centre_f - X.col(i)).squaredNorm() <= sqRadius_f;
-            }
-            success &= (A * centre_f).isApprox(b);
-        }
         return tuple{centre_f, sqRadius_f, success};
     }
 
@@ -249,12 +281,12 @@ namespace cmb {
     -   the squared radius of the bounding sphere as a Real_t scalar.
     -   a boolean flag that is true if the solution is known to be correct to within machine precision.
     */
-    template <FloatMatrixXpr X_t>
-    tuple<RealVector<typename X_t::Scalar>, typename X_t::Scalar, bool> miniball(
+    template <FloatType Float_t, RealMatrixXpr<Float_t> X_t>
+    tuple<RealVector<Float_t>, Float_t, bool> miniball(
     const int d,
     const MatrixBase<X_t>& X) {
         typedef X_t::Scalar Float_t;
-        return constrained_miniball(
+        return constrained_miniball<Float_t>(
             d, X, 
             RealMatrix<Float_t>(0, d), 
             RealVector<Float_t>(0));
