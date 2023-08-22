@@ -15,7 +15,7 @@ The algorithm is provided as a single header-only library, and requires
 - The [Eigen C++ library](https://eigen.tuxfamily.org/index.php?title=Main_Page) (tested with version 3.4.0).
 
 ### Optional Dependencies
-- The [GNU MP Library](https://gmplib.org/) (tested with version 6.3.0) and the [GNU MPFR Library](https://www.mpfr.org/) (tested with version 4.2.0) for exact geometric computation. These will automatically be used if `<mpfr.h>` is found. You can disable this behaviour by defining the preprocessor macro `CMB_NO_MPFR`.
+- The [GNU MP Library](https://gmplib.org/) (tested with version 6.3.1) and the [GNU MPFR Library](https://www.mpfr.org/) (tested with version 4.2.0) for exact geometric computation. These will automatically be used if `<mpfr.h>` is found. You can disable this behaviour by defining the preprocessor macro `CMB_NO_MPFR`.
 
 ## Example usage
 See `example.cpp` for examples.
