@@ -71,6 +71,14 @@ int main() {
     cout << "Solution found: " << (success ? "true" : "false") << endl;
     cout << "Centre : " << centre.transpose().eval() << endl;
     cout << "Squared radius : " << sqRadius << endl;
+    /*
+    OUTPUT:
+
+        Solution found: true
+        Centre : 2.89688e-17 1.11022e-16           1
+        Squared radius : 2
+
+    */
 
     // Try an edge case 
     // Same points in 2D
@@ -81,6 +89,14 @@ int main() {
     cout << "Solution found: " << (success ? "true" : "false") << endl;
     cout << "Centre : " << centre.transpose().eval() << endl;
     cout << "Squared radius : " << sqRadius << endl;
+    /*
+    OUTPUT:
+
+        Solution found: true
+        Centre : 1.11022e-16 1.92296e-16
+        Squared radius : 1
+        
+    */
 
     int t;
     cin >> t;
