@@ -231,12 +231,12 @@ namespace cmb {
             typedef mpfr::mpreal Real_t;
             mpfr::mpreal::set_default_prec(mpfr::digits2bits(digits_precision));
         #else
-            typedef Float_t Real_t;
+            typedef typename Float_t Real_t;
         #endif
         Real_t tol = static_cast<Real_t>(Eigen::NumTraits<Float_t>::dummy_precision());
-        ConstrainedMiniballHelper<Real_t> helper(d, A.cast<Real_t>(), b.cast<Real_t>(), tol);
+        ConstrainedMiniballHelper<Real_t> helper(d, A.template cast<Real_t>(), b.template cast<Real_t>(), tol);
         
-        const RealMatrix<Real_t> points = X.cast<Real_t>();
+        const RealMatrix<Real_t> points = X.template cast<Real_t>();
         RealVector<Real_t> centre(d);
         Real_t sqRadius;
         RealVector<Float_t> centre_f(d);
@@ -245,7 +245,7 @@ namespace cmb {
 
         if (helper.subspace_rank() == 0) {
             std::tie(centre, success) = helper.solve();
-            centre_f = centre.cast<Float_t>();
+            centre_f = centre.template cast<Float_t>();
             sqRadius_f = (X.colwise() - centre_f).colwise().squaredNorm().maxCoeff();
         }
         else {
@@ -254,7 +254,7 @@ namespace cmb {
             std::iota(X_idx.begin(), X_idx.end(), static_cast<Index>(0));
             std::shuffle(X_idx.begin(), X_idx.end(), rd);
             std::tie(centre, sqRadius, success) = _constrained_miniball(points, X_idx, Y_idx, helper);
-            centre_f = centre.cast<Float_t>();
+            centre_f = centre.template cast<Float_t>();
             if (std::is_same<Float_t, Real_t>::value) {
                 sqRadius_f = static_cast<Float_t>(sqRadius);
             }
@@ -285,7 +285,7 @@ namespace cmb {
     tuple<RealVector<Float_t>, Float_t, bool> miniball(
     const int d,
     const MatrixBase<X_t>& X) {
-        typedef X_t::Scalar Float_t;
+        typedef typename X_t::Scalar Float_t;
         return constrained_miniball<Float_t>(
             d, X, 
             RealMatrix<Float_t>(0, d), 
