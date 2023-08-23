@@ -285,7 +285,6 @@ namespace cmb {
     tuple<RealVector<Float_t>, Float_t, bool> miniball(
     const int d,
     const MatrixBase<X_t>& X) {
-        typedef typename X_t::Scalar Float_t;
         return constrained_miniball<Float_t>(
             d, X, 
             RealMatrix<Float_t>(0, d), 
