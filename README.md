@@ -14,9 +14,6 @@ The algorithm is provided as a single header-only library, and requires
 - C++20 compliant compiler with support for concepts (GCC 10.3 or later or later, MSVC 2019 16.3 or later).
 - The [Eigen C++ library](https://eigen.tuxfamily.org/index.php?title=Main_Page) (tested with version 3.4.0).
 
-### Optional Dependencies
-- The [GNU MP Library](https://gmplib.org/) (tested with version 6.3.1) and the [GNU MPFR Library](https://www.mpfr.org/) (tested with version 4.2.0) for exact geometric computation. These will automatically be used if `<mpfr.h>` is found. You can disable this behaviour by defining the preprocessor macro `CMB_NO_MPFR`.
-
 ## Example usage
 See `example.cpp` for examples.
 
@@ -28,4 +25,3 @@ ConstrainedMiniball is released under the GNU Lesser General Public License ("LG
 ## References
 
 <a name="bib1">[1]</a> E. Welzl, “Smallest enclosing disks (balls and ellipsoids),” in New Results and New Trends in Computer Science, H. Maurer, Ed., in Lecture Notes in Computer Science. Berlin, Heidelberg: Springer, 1991, pp. 359–370. doi: 10.1007/BFb0038202.
-
