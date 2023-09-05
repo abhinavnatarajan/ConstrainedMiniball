@@ -217,15 +217,13 @@ namespace cmb {
     */
     template <FloatType Float_t, RealMatrixXpr<Float_t> X_t, RealMatrixXpr<Float_t> A_t, RealVectorXpr<Float_t> b_t>
     tuple<RealVector<Float_t>, Float_t, bool> constrained_miniball(
-    const int d,
     const MatrixBase<X_t>& X,
     const MatrixBase<A_t>& A,
     const MatrixBase<b_t>& b) {
 
         assert(A.rows() == b.rows());
-        assert(d == X.rows());
-        assert(d == A.cols());
-
+        assert(A.cols() == X.rows());
+        int d = X.rows();
         #ifdef CMB_USE_MPFR
             constexpr int digits_precision = std::numeric_limits<Float_t>::digits10 + 10;
             typedef mpfr::mpreal Real_t;
@@ -233,7 +231,7 @@ namespace cmb {
         #else
             typedef typename Float_t Real_t;
         #endif
-        Real_t tol = static_cast<Real_t>(Eigen::NumTraits<Float_t>::dummy_precision());
+        Real_t tol = Eigen::NumTraits<Real_t>::dummy_precision();
         ConstrainedMiniballHelper<Real_t> helper(d, A.template cast<Real_t>(), b.template cast<Real_t>(), tol);
         
         const RealMatrix<Real_t> points = X.template cast<Real_t>();
@@ -283,11 +281,10 @@ namespace cmb {
     */
     template <FloatType Float_t, RealMatrixXpr<Float_t> X_t>
     tuple<RealVector<Float_t>, Float_t, bool> miniball(
-    const int d,
     const MatrixBase<X_t>& X) {
         return constrained_miniball<Float_t>(
-            d, X, 
-            RealMatrix<Float_t>(0, d), 
+            X, 
+            RealMatrix<Float_t>(0, X.rows()), 
             RealVector<Float_t>(0));
     }
 }

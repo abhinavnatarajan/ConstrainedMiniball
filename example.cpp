@@ -49,14 +49,14 @@ tuple<RealMatrix<typename Derived::Scalar>, RealVector<typename Derived::Scalar>
     RealMatrix<Real_t> E(n-1, X.rows());
     RealVector<Real_t> b(n-1);
     if (n > 1) {
-        b = (X.rightCols(n-1).colwise().squaredNorm().array() - X.col(0).squaredNorm()).transpose();
+        b = 0.5 * (X.rightCols(n-1).colwise().squaredNorm().array() - X.col(0).squaredNorm()).transpose();
         E = (X.rightCols(n-1).colwise() - X.col(0)).transpose();
     }
     return tuple{E, b};
 }
 
 int main() {
-    // 3 equidistant points on the circle in the xy-plane in 3D
+    // 3 equidistant points on the unit circle in the xy-plane in 3D
     Eigen::MatrixXd X {
         {1.0, -0.5, -0.5},
         {0.0, std::sin(2 * std::numbers::pi / 3), std::sin(4 * std::numbers::pi / 3)},
@@ -67,7 +67,7 @@ int main() {
         {0.0, 0.0, 1.0}
     };
     Eigen::VectorXd b { {1.0} };
-    auto [centre, sqRadius, success] = cmb::constrained_miniball<double>(3, X, A, b);
+    auto [centre, sqRadius, success] = cmb::constrained_miniball<double>(X, A, b);
     cout << "Solution found: " << (success ? "true" : "false") << endl;
     cout << "Centre : " << centre.transpose().eval() << endl;
     cout << "Squared radius : " << sqRadius << endl;
@@ -85,7 +85,7 @@ int main() {
     X.conservativeResize(2, Eigen::NoChange);
     // Set A, b to manually define the subspace equidistant from points in X
     std::tie(A, b) = equidistant_subspace(X);
-    std::tie(centre, sqRadius, success) = cmb::constrained_miniball<double>(2, X, A, b);
+    std::tie(centre, sqRadius, success) = cmb::constrained_miniball<double>(X, A, b);
     cout << "Solution found: " << (success ? "true" : "false") << endl;
     cout << "Centre : " << centre.transpose().eval() << endl;
     cout << "Squared radius : " << sqRadius << endl;
