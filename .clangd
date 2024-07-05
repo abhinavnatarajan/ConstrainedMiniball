@@ -1,0 +1,2 @@
+CompileFlags:
+  Add: [-Ivcpkg_installed/x64-linux/include, -std=c++20]

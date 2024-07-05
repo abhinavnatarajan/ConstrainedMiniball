@@ -1,0 +1,6 @@
+TabWidth: 4 # how many spaces count for a tab
+IndentWidth: 4 # how many spaces to indent with
+UseTab: Always # replace space indents with tabs
+AccessModifierOffset: -4
+IncludeBlocks: Preserve
+SortIncludes: Never
