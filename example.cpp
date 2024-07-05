@@ -2,9 +2,9 @@
     This file is part of ConstrainedMiniball.
 
     ConstrainedMiniball: Smallest Enclosing Ball with Affine Constraints.
-    Based on: E. Welzl, “Smallest enclosing disks (balls and ellipsoids),” 
-    in New Results and New Trends in Computer Science, H. Maurer, Ed., 
-    in Lecture Notes in Computer Science. Berlin, Heidelberg: Springer, 
+    Based on: E. Welzl, “Smallest enclosing disks (balls and ellipsoids),”
+    in New Results and New Trends in Computer Science, H. Maurer, Ed.,
+    in Lecture Notes in Computer Science. Berlin, Heidelberg: Springer,
     1991, pp. 359–370. doi: 10.1007/BFb0038202.
 
     Project homepage:    http://github.com/abhinavnatarajan/ConstrainedMiniball
@@ -15,7 +15,8 @@
     Abhinav Natarajan
 
     Licensing:
-    ConstrainedMiniball is released under the GNU Lesser General Public License ("LGPL").
+    ConstrainedMiniball is released under the GNU Lesser General Public License
+   ("LGPL").
 
     GNU Lesser General Public License ("LGPL") copyright permissions statement:
     **************************************************************************
@@ -33,9 +34,9 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 #include "ConstrainedMiniball.h"
-#include <iostream>
 #include <Eigen/Dense>
 #include <cmath>
+#include <iostream>
 #include <numbers>
 #include <tuple>
 
@@ -43,62 +44,64 @@ using std::cout, std::endl, std::cin;
 using namespace cmb;
 
 template <class Derived>
-tuple<RealMatrix<typename Derived::Scalar>, RealVector<typename Derived::Scalar>> equidistant_subspace(const Eigen::MatrixBase<Derived>& X) {
-    int n = X.cols();
-    typedef Derived::Scalar Real_t;
-    RealMatrix<Real_t> E(n-1, X.rows());
-    RealVector<Real_t> b(n-1);
-    if (n > 1) {
-        b = 0.5 * (X.rightCols(n-1).colwise().squaredNorm().array() - X.col(0).squaredNorm()).transpose();
-        E = (X.rightCols(n-1).colwise() - X.col(0)).transpose();
-    }
-    return tuple{E, b};
+tuple<RealMatrix<typename Derived::Scalar>,
+      RealVector<typename Derived::Scalar>>
+equidistant_subspace(const Eigen::MatrixBase<Derived> &X) {
+  int n = X.cols();
+  typedef Derived::Scalar Real_t;
+  RealMatrix<Real_t> E(n - 1, X.rows());
+  RealVector<Real_t> b(n - 1);
+  if (n > 1) {
+    b = 0.5 * (X.rightCols(n - 1).colwise().squaredNorm().array() -
+               X.col(0).squaredNorm())
+                  .transpose();
+    E = (X.rightCols(n - 1).colwise() - X.col(0)).transpose();
+  }
+  return tuple{E, b};
 }
 
 int main() {
-    // 3 equidistant points on the unit circle in the xy-plane in 3D
-    Eigen::MatrixXd X {
-        {1.0, -0.5, -0.5},
-        {0.0, std::sin(2 * std::numbers::pi / 3), std::sin(4 * std::numbers::pi / 3)},
-        {0.0, 0.0, 0.0}
-    }, 
-    // Ax = b define the z=1 plane
-    A {
-        {0.0, 0.0, 1.0}
-    };
-    Eigen::VectorXd b { {1.0} };
-    auto [centre, sqRadius, success] = cmb::constrained_miniball<double>(X, A, b);
-    cout << "Solution found: " << (success ? "true" : "false") << endl;
-    cout << "Centre : " << centre.transpose().eval() << endl;
-    cout << "Squared radius : " << sqRadius << endl;
-    /*
-    OUTPUT:
+  // 3 equidistant points on the unit circle in the xy-plane in 3D
+  Eigen::MatrixXd X{{1.0, -0.5, -0.5},
+                    {0.0, std::sin(2 * std::numbers::pi / 3),
+                     std::sin(4 * std::numbers::pi / 3)},
+                    {0.0, 0.0, 0.0}},
+      // Ax = b define the z=1 plane
+      A{{0.0, 0.0, 1.0}};
+  Eigen::VectorXd b{{1.0}};
+  auto [centre, sqRadius, success] = cmb::constrained_miniball<double>(X, A, b);
+  cout << "Solution found: " << (success ? "true" : "false") << endl;
+  cout << "Centre : " << centre.transpose().eval() << endl;
+  cout << "Squared radius : " << sqRadius << endl;
+  /*
+  OUTPUT:
 
-        Solution found: true
-        Centre : 2.89688e-17 1.11022e-16           1
-        Squared radius : 2
+      Solution found: true
+      Centre : 2.89688e-17 1.11022e-16           1
+      Squared radius : 2
 
-    */
+  */
 
-    // Try an edge case 
-    // Same points in 2D
-    X.conservativeResize(2, Eigen::NoChange);
-    // Set A, b to manually define the subspace equidistant from points in X
-    std::tie(A, b) = equidistant_subspace(X);
-    std::tie(centre, sqRadius, success) = cmb::constrained_miniball<double>(X, A, b);
-    cout << "Solution found: " << (success ? "true" : "false") << endl;
-    cout << "Centre : " << centre.transpose().eval() << endl;
-    cout << "Squared radius : " << sqRadius << endl;
-    /*
-    OUTPUT:
+  // Try an edge case
+  // Same points in 2D
+  X.conservativeResize(2, Eigen::NoChange);
+  // Set A, b to manually define the subspace equidistant from points in X
+  std::tie(A, b) = equidistant_subspace(X);
+  std::tie(centre, sqRadius, success) =
+      cmb::constrained_miniball<double>(X, A, b);
+  cout << "Solution found: " << (success ? "true" : "false") << endl;
+  cout << "Centre : " << centre.transpose().eval() << endl;
+  cout << "Squared radius : " << sqRadius << endl;
+  /*
+  OUTPUT:
 
-        Solution found: true
-        Centre : 1.11022e-16 1.92296e-16
-        Squared radius : 1
-        
-    */
+      Solution found: true
+      Centre : 1.11022e-16 1.92296e-16
+      Squared radius : 1
 
-    int t;
-    cin >> t;
-    return 0;
+  */
+
+  int t;
+  cin >> t;
+  return 0;
 }
