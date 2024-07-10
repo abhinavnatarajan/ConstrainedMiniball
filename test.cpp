@@ -1,3 +1,38 @@
+/*
+	This file is part of ConstrainedMiniball.
+
+	ConstrainedMiniball: Smallest Enclosing Ball with Affine Constraints.
+	Based on: E. Welzl, “Smallest enclosing disks (balls and ellipsoids),”
+	in New Results and New Trends in Computer Science, H. Maurer, Ed.,
+	in Lecture Notes in Computer Science. Berlin, Heidelberg: Springer,
+	1991, pp. 359–370. doi: 10.1007/BFb0038202.
+
+	Project homepage:    http://github.com/abhinavnatarajan/ConstrainedMiniball
+
+	Copyright (c) 2023 Abhinav Natarajan
+
+	Contributors:
+	Abhinav Natarajan
+
+	Licensing:
+	ConstrainedMiniball is released under the GNU Lesser General Public License
+   ("LGPL").
+
+	GNU Lesser General Public License ("LGPL") copyright permissions statement:
+	**************************************************************************
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Lesser General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU Lesser General Public License
+	along with this program. If not, see <http://www.gnu.org/licenses/>.
+*/
 #include "ConstrainedMiniball.h"
 #include <Eigen/Dense>
 #include <cassert>
@@ -7,8 +42,8 @@
 #include <tuple>
 #include <vector>
 
-using std::cout, std::endl, std::cin, std::vector, std::tie, std::tuple,
-	std::sqrt, std::min, std::abs, std::sin, std::cos, std::numbers::pi;
+using std::cout, std::endl, std::vector, std::tie, std::tuple,
+	std::min, std::abs, std::sin, std::numbers::pi;
 
 template <typename T> using limits = std::numeric_limits<T>;
 
@@ -163,8 +198,5 @@ int main() {
 	assert(approx_equal((centre - correct_centre).norm(), static_cast<S>(0)));
 	assert(approx_equal(sqRadius, correct_sqRadius));
 	assert(success);
-
-	int t;
-	cin >> t;
 	return 0;
 }

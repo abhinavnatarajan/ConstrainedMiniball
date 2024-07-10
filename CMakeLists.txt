@@ -1,0 +1,16 @@
+cmake_minimum_required(VERSION 3.23)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_BUILD_TYPE Release)
+
+project(ConstrainedMiniball LANGUAGES CXX)
+include(CTest)
+find_package(Eigen3 CONFIG REQUIRED)
+if (Eigen3_FOUND)
+	message(STATUS "Found Eigen3 headers in: ${EIGEN3_INCLUDE_DIR}")
+endif()
+add_executable(runtests test.cpp)
+target_link_libraries(runtests PRIVATE Eigen3::Eigen)
+
+add_test(NAME test COMMAND runtests)

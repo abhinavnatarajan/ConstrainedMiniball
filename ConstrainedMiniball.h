@@ -36,26 +36,15 @@
 #pragma once
 #ifndef CONSTRAINED_MINIBALL_H
 #define CONSTRAINED_MINIBALL_H
+#define NDEBUG
 
 #include <Eigen/Dense>
 #include <algorithm>
 #include <numeric>
 #include <random>
 #include <tuple>
-#include <type_traits>
 #include <vector>
-#ifndef NDEBUG
-#include <iostream>
-#include <sstream>
-#include <string>
-template <typename T>
-std::string to_string_with_precision(const T a_value, const int n = 18) {
-	std::ostringstream out;
-	out.precision(n);
-	out << std::fixed << a_value;
-	return std::move(out).str();
-}
-#endif
+#include <cassert>
 
 namespace cmb {
 using std::tuple, std::vector, Eigen::MatrixBase, Eigen::Matrix, Eigen::Index;
@@ -87,6 +76,7 @@ template <class Real_t> class ConstrainedMiniballHelper {
 	Real_t tol;
 
 public:
+	// initialise the helper with the affine constraint Ax = b
 	template <RealMatrixXpr<Real_t> A_t, RealVectorXpr<Real_t> b_t>
 	ConstrainedMiniballHelper(int dimension, const MatrixBase<A_t> &A,
 							  const MatrixBase<b_t> &b, Real_t tol)
@@ -98,17 +88,30 @@ public:
 		v = b.eval();
 	}
 
+	/* Add a constraint to the helper corresponding to
+	requiring that the bounding ball pass through the point p. */
 	template <RealVectorXpr<Real_t> T> void add_point(T &p) {
 		if (num_points == 0) {
+			// if there are no other points set so far,
+			// then we just remember the point p
 			assert(p.rows() == dim);
 			p0 = p;
 		} else {
+			// Otherwise we add a new row to M and b, where Mx = b is our
+			// system. We should add the row p - p0 to M and the entry 0.5 * ||p
+			// - p0||^2 to b, but if we assume that p0 has been translated to
+			// the origin then we can just add the row p to M and the entry 0.5
+			// * ||p||^2 to b. We actually do not need to add the last entry to
+			// b yet, since we can compute it from M when we actually need to
+			// solve the system.
 			M.conservativeResize(M.rows() + 1, Eigen::NoChange);
 			M(Eigen::last, Eigen::all) = (p - p0).transpose().eval();
 		}
 		num_points += 1;
 	}
 
+	// remove the last point constraint that has been added to the system
+	// if there is only one point so far, just set it to 0
 	void remove_last_point() {
 		if (num_points > 1) {
 			M.conservativeResize(M.rows() - 1, Eigen::NoChange);
@@ -126,34 +129,54 @@ public:
 
 	tuple<RealVector<Real_t>, bool> solve() const {
 		if (num_linear_constraints == 0 && num_points <= 1) {
-			// note that the program logic guarantees that p0 = 0 if num_points
-			// == 0 so the following is valid
+			// if there are no linear constraints and at most one point,
+			// then we just return the ball of radius zero passing through
+			// the point if it exists, or the ball of radius zero at the origin
+			// if the point does not exist.
+			// Note that the program logic guarantees that p0 = 0
+			// if num_points == 0 so the following is valid
 			return tuple{p0, true};
 		} else {
-			RealVector<Real_t> rhs(M.rows());
-			// note that if num_points == 0 then v - A*p0 has 0 rows and is
+			// Otherwise we need to solve the system Mx = b.
+			// We need to compute the vector b, since we did not
+			// compute the entries when adding the points.
+			// We also need to account for the fact that we have
+			// translated everything so that p0 is origin.
+			// note that if num_points == 0 then v - M*p0 has 0 rows and is
 			// still valid
-			rhs << v - M.topRows(num_linear_constraints) * p0,
+			RealVector<Real_t> b(M.rows());
+			b << v - M.topRows(num_linear_constraints) * p0,
 				0.5 * M.bottomRows(M.rows() - num_linear_constraints)
 						  .rowwise()
 						  .squaredNorm();
 			RealVector<Real_t> c =
-				M.completeOrthogonalDecomposition().pseudoInverse() * rhs;
-			return tuple{(c + p0).eval(), (M * c - rhs).isZero(tol)};
+				M.completeOrthogonalDecomposition().pseudoInverse() * v;
+			return tuple{(c + p0).eval(), (M * c - v).isZero(tol)};
 		}
 	}
 };
 
+/* Compute the ball of minimum radius that bounds the points in X_idx
+ * and contains the points of Y_idx on its boundary, while respecting
+ * the affine constraints present in helper */
 template <class Real_t, RealMatrixXpr<Real_t> T>
 tuple<RealVector<Real_t>, Real_t, bool>
 _constrained_miniball(const MatrixBase<T> &points, vector<Index> &X_idx,
 					  vector<Index> &Y_idx,
 					  ConstrainedMiniballHelper<Real_t> &helper) {
 	if (X_idx.size() == 0 || helper.subspace_rank() == 0) {
+		// if there are no points to bound or if the constraints determine a
+		// unique point, then compute the point of minimum norm
+		// that satisfies the constraints
 		auto [centre, success] = helper.solve();
 		if (Y_idx.size() == 0) {
+			// if there are no boundary points to check then we are done
 			return tuple{centre, static_cast<Real_t>(0), success};
 		} else {
+			// get the squared radius of the ball that passes through the points
+			// in Y_idx and has centre at the computed point
+			// We take a maximum distance from the centre to any point in Y_idx
+			// to deal with floating point inaccuracies
 			Real_t sqRadius = (points(Eigen::all, Y_idx).colwise() - centre)
 								  .colwise()
 								  .squaredNorm()
@@ -161,19 +184,31 @@ _constrained_miniball(const MatrixBase<T> &points, vector<Index> &X_idx,
 			return tuple{centre, sqRadius, success};
 		}
 	}
+	// find the constrained miniball of all except the last point
 	Index i = X_idx.back();
 	X_idx.pop_back();
 	auto [centre, sqRadius, success] =
 		_constrained_miniball(points, X_idx, Y_idx, helper);
 	if ((points.col(i) - centre).squaredNorm() > sqRadius) {
+		// if the last point does not lie in the computed bounding ball,
+		// add it to the list of points that will lie on the boundary of the
+		// eventual ball. This determines a new constraint.
 		helper.add_point(points.col(i));
 		Y_idx.push_back(i);
+		// compute a bounding ball with the new constraint
 		auto t = _constrained_miniball(points, X_idx, Y_idx, helper);
+		// undo the addition of the last point
+		// this matters in nested calls to this function
+		// because we assume that the function does not mutate its arguments
 		helper.remove_last_point();
 		Y_idx.pop_back();
 		X_idx.push_back(i);
+		// return the computed bounding ball
 		return t;
 	} else {
+		// if the last point lies in the computed bounding ball, then
+		// return the same ball
+		// making sure to undo the removal of the last point from X_idx
 		X_idx.push_back(i);
 		return tuple{centre, sqRadius, success};
 	}
@@ -213,7 +248,6 @@ template <typename Scalar, RealMatrixXpr<Scalar> X_t, RealMatrixXpr<Scalar> A_t,
 tuple<RealVector<Scalar>, Scalar, bool>
 constrained_miniball(const MatrixBase<X_t> &X, const MatrixBase<A_t> &A,
 					 const MatrixBase<b_t> &b) {
-
 	assert(A.rows() == b.rows());
 	assert(A.cols() == X.rows());
 	int d = X.rows();

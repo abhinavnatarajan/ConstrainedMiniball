@@ -1,8 +1,11 @@
 {
-  "dependencies": [
-    {
-      "name": "eigen3",
-      "version>=": "3.4.0#2"
-    }
-  ]
+	"$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+	"name": "constrainedminiball",
+	"version": "0.0.1",
+	"dependencies": [
+		{
+			"name": "eigen3",
+			"version>=": "3.4.0#2"
+		}
+	]
 }

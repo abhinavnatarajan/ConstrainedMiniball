@@ -48,7 +48,7 @@ tuple<RealMatrix<typename Derived::Scalar>,
 	  RealVector<typename Derived::Scalar>>
 equidistant_subspace(const Eigen::MatrixBase<Derived> &X) {
 	int n = X.cols();
-	typedef Derived::Scalar Real_t;
+	typedef typename Derived::Scalar Real_t;
 	RealMatrix<Real_t> E(n - 1, X.rows());
 	RealVector<Real_t> b(n - 1);
 	if (n > 1) {
