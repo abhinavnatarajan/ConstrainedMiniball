@@ -14,14 +14,10 @@
 	Contributors:
 	Abhinav Natarajan
 
-	Licensing:
-	ConstrainedMiniball is released under the GNU Lesser General Public License
-   ("LGPL").
-
-	GNU Lesser General Public License ("LGPL") copyright permissions statement:
+	GNU General Public License ("GPL") copyright permissions statement:
 	**************************************************************************
 	This program is free software: you can redistribute it and/or modify
-	it under the terms of the GNU Lesser General Public License as published by
+	it under the terms of the GNU General Public License as published by
 	the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
 
@@ -30,7 +26,7 @@
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
 
-	You should have received a copy of the GNU Lesser General Public License
+	You should have received a copy of the GNU General Public License
 	along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 #include "ConstrainedMiniball.h"
@@ -70,18 +66,10 @@ int main() {
 		A{{0.0, 0.0, 1.0}};
 	Eigen::VectorXd b{{1.0}};
 	auto [centre, sqRadius, success] =
-		cmb::constrained_miniball<double>(X, A, b);
+		cmb::constrained_miniball<cmb::SolverMethod::PSEUDOINVERSE>(X, A, b);
 	cout << "Solution found: " << (success ? "true" : "false") << endl;
 	cout << "Centre : " << centre.transpose().eval() << endl;
 	cout << "Squared radius : " << sqRadius << endl;
-	/*
-	OUTPUT:
-
-		Solution found: true
-		Centre : 2.89688e-17 1.11022e-16           1
-		Squared radius : 2
-
-	*/
 
 	// Try an edge case
 	// Same points in 2D
@@ -89,18 +77,10 @@ int main() {
 	// Set A, b to manually define the subspace equidistant from points in X
 	std::tie(A, b) = equidistant_subspace(X);
 	std::tie(centre, sqRadius, success) =
-		cmb::constrained_miniball<double>(X, A, b);
+		cmb::constrained_miniball<cmb::SolverMethod::QP_SOLVER>(X, A, b);
 	cout << "Solution found: " << (success ? "true" : "false") << endl;
 	cout << "Centre : " << centre.transpose().eval() << endl;
 	cout << "Squared radius : " << sqRadius << endl;
-	/*
-	OUTPUT:
-
-		Solution found: true
-		Centre : 1.11022e-16 1.92296e-16
-		Squared radius : 1
-
-	*/
 
 	int t;
 	cin >> t;

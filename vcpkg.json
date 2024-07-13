@@ -1,11 +1,29 @@
 {
-	"$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
-	"name": "constrainedminiball",
-	"version": "0.0.1",
-	"dependencies": [
-		{
-			"name": "eigen3",
-			"version>=": "3.4.0#2"
-		}
-	]
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "cmb",
+  "version": "1.0.0",
+  "builtin-baseline": "f61a294e765b257926ae9e9d85f96468a0af74e7",
+  "dependencies": [
+    {
+      "name": "cgal",
+      "version>=": "5.6"
+    },
+    {
+      "name": "eigen3",
+      "version>=": "3.4.0#2"
+    },
+    {
+      "name": "gmp",
+      "platform": "windows",
+      "version>=": "6.2.1#21"
+    },
+    {
+      "name": "gmp",
+      "features": [
+        "fat"
+      ],
+      "platform": "!windows",
+      "version>=": "6.2.1#21"
+    }
+  ]
 }

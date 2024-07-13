@@ -7,42 +7,45 @@
 	},
 	"configurePresets": [
 		{
-			"name": "ninja-multi-config",
+			"name": "default",
 			"displayName": "Ninja Multi-Config",
 			"generator": "Ninja Multi-Config",
 			"toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-			"binaryDir": "${sourceDir}/build/"
+			"binaryDir": "${sourceDir}/build/",
+			"cacheVariables": {
+				"CMAKE_EXPORT_COMPILE_COMMANDS": "YES"
+			}
 		}
 	],
 	"buildPresets": [
 		{
 			"name": "debug",
 			"displayName": "Debug",
-			"configurePreset": "ninja-multi-config",
+			"configurePreset": "default",
 			"configuration": "Debug"
 		},
 		{
 			"name": "rel-with-deb-info",
 			"displayName": "Release With Debug Info",
-			"configurePreset": "ninja-multi-config",
+			"configurePreset": "default",
 			"configuration": "RelWithDebInfo"
 		},
 		{
 			"name": "release",
 			"displayName": "Release",
-			"configurePreset": "ninja-multi-config",
+			"configurePreset": "default",
 			"configuration": "Release"
 		},
 		{
 			"name": "min-size-rel",
 			"displayName": "Minimal Release",
-			"configurePreset": "ninja-multi-config",
+			"configurePreset": "default",
 			"configuration": "MinSizeRel"
 		},
 		{
 			"name": "clean",
 			"displayName": "Clean",
-			"configurePreset": "ninja-multi-config",
+			"configurePreset": "default",
 			"targets": "clean"
 		}
 	],
@@ -50,7 +53,7 @@
 		{
 			"name": "test-debug-all",
 			"displayName": "Run all tests (Debug)",
-			"configurePreset": "ninja-multi-config",
+			"configurePreset": "default",
 			"configuration": "Debug",
 			"output": {
 				"shortProgress": true,
@@ -63,7 +66,7 @@
 		{
 			"name": "test-release-all",
 			"displayName": "Run all tests (Release)",
-			"configurePreset": "ninja-multi-config",
+			"configurePreset": "default",
 			"configuration": "Release",
 			"output": {
 				"shortProgress": true,
@@ -81,7 +84,7 @@
 			"steps": [
 				{
 					"type": "configure",
-					"name": "ninja-multi-config"
+					"name": "default"
 				},
 				{
 					"type": "build",
@@ -99,7 +102,7 @@
 			"steps": [
 				{
 					"type": "configure",
-					"name": "ninja-multi-config"
+					"name": "default"
 				},
 				{
 					"type": "build",
