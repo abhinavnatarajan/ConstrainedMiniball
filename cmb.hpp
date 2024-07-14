@@ -233,20 +233,15 @@ X, A, and b must have the same scalar type Scalar.
 
 RETURNS:
 std::tuple with the following elements (in order):
--   a column vector with Scalar entries that is the centre of the sphere of
+-   the centre of the sphere of
 minimum radius bounding every point in X.
--   the squared radius of the bounding sphere as a Scalar scalar.
--   a boolean flag that is true if the solution is known to be correct to within
-machine precision.
+-   the squared radius of the bounding sphere.
+-   a boolean flag that is true if the solution is known to be correct.
 
 REMARK:
-The result returned by this function defines a sphere that is guaranteed to
-bound all points in the input set. Due to the limits of floating-point
-computation, it is not theoretically guaranteed that this is the smallest sphere
-possible. In practice the error in the radius and coordinates of the centre are
-on the order of magnitude of 1e-5 for float, 1e-12 for double, and 1e-15 for
-long double.
-
+The result returned by this function is exact due to the use of exact arithmetic internally.
+The scalar type of the return values is CGAL::Quotient<CGAL::Gmpzf>, which is an exact representation
+of a rational number.
 */
 template <detail::MatrixExpr X_t, detail::MatrixExpr A_t, detail::VectorExpr b_t>
 	requires std::same_as<typename X_t::Scalar, typename A_t::Scalar> &&
@@ -281,9 +276,9 @@ floating-point type.
 
 RETURNS:
 std::tuple with the following elements (in order):
--   a column vector with Real_t entries that is the centre of the sphere of
+-   the centre of the sphere of
 minimum radius bounding every point in X.
--   the squared radius of the bounding sphere as a Real_t scalar.
+-   the squared radius of the bounding sphere.
 -   a boolean flag that is true if the solution is known to be correct to within
 machine precision.
 */
