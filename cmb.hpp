@@ -353,7 +353,7 @@ minimum radius bounding every point in X.
 -   a boolean flag that is true if the solution is known to be correct to within
 machine precision.
 */
-template <MatrixXdExpr X_t> tuple<VectorXd, double, bool> miniball(const MatrixBase<X_t>& X) {
-	return constrained_miniball(X, MatrixXd(0, X.rows()), VectorXd(0));
+template <SolverMethod S, MatrixXdExpr X_t> tuple<VectorXd, double, bool> miniball(const MatrixBase<X_t>& X) {
+	return constrained_miniball<S>(X, MatrixXd(0, X.rows()), VectorXd(0));
 }
 }  // namespace cmb
