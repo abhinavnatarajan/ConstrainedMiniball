@@ -42,22 +42,20 @@
 #include <CGAL/QP_models.h>
 
 #include <Eigen/Dense>
+
 #include <algorithm>
-#include <numeric>
 #include <random>
 #include <tuple>
 #include <vector>
 
 namespace cmb {
-enum class SolverMethod {
-	QP_SOLVER,
-	PSEUDOINVERSE
-};
+using SolverScalarType   = CGAL::Gmpzf;                       // exact floats
+using SolutionScalarType = CGAL::Quotient<SolverScalarType>;  // exact rational numbers
 
-namespace {
+namespace detail {
 
-using std::tuple, std::max, std::vector, Eigen::MatrixBase, Eigen::Matrix, Eigen::MatrixXd,
-	Eigen::VectorXd, Eigen::Index;
+using std::tuple, std::max, std::vector, Eigen::MatrixBase, Eigen::Matrix, Eigen::Vector,
+	Eigen::MatrixXd, Eigen::VectorXd, Eigen::Index, std::same_as;
 
 template <class Real_t> using RealVector = Matrix<Real_t, Eigen::Dynamic, 1>;
 
@@ -67,36 +65,24 @@ template <class Derived>
 concept MatrixExpr = requires { typename MatrixBase<Derived>; };
 
 template <class Derived>
-concept VectorXpr = requires { typename MatrixBase<Derived>; } && Derived::ColsAtCompileTime == 1;
+concept VectorExpr = requires { typename MatrixBase<Derived>; } && Derived::ColsAtCompileTime == 1;
 
 template <class Derived, class Real_t>
-concept RealMatrixExpr = MatrixExpr<Derived> && std::same_as<typename Derived::Scalar, Real_t>;
+concept RealMatrixExpr = MatrixExpr<Derived> && same_as<typename Derived::Scalar, Real_t>;
 
-template <class Derived>
-concept MatrixXdExpr = RealMatrixExpr<Derived, double>;
+template <class Derived, class Real_t>
+concept RealVectorExpr = VectorExpr<Derived> && same_as<typename Derived::Scalar, Real_t>;
 
-template <class Derived>
-concept VectorXdExpr = VectorXpr<Derived> && std::same_as<typename Derived::Scalar, double>;
+using QuadraticProgram         = CGAL::Quadratic_program<SolverScalarType>;
+using QuadraticProgramSolution = CGAL::Quadratic_program_solution<SolverScalarType>;
 
-using SolverExactType          = CGAL::Gmpzf;  // exact rational numbers
-using QuadraticProgram         = CGAL::Quadratic_program<SolverExactType>;
-using QuadraticProgramSolution = CGAL::Quadratic_program_solution<SolverExactType>;
-using ExactSolutionType        = CGAL::Quotient<SolverExactType>;
-
-template <SolverMethod S>
-using SolverType = std::conditional<S == SolverMethod::QP_SOLVER, SolverExactType, double>::type;
-
-template <SolverMethod S>
-using SolutionType =
-	std::conditional<S == SolverMethod::QP_SOLVER, ExactSolutionType, double>::type;
-
-template <SolverMethod S> class ConstrainedMiniballSolver {
-	const RealMatrix<SolverType<S>> A, points;
-	const RealVector<SolverType<S>> b;
-	RealMatrix<SolverType<S>>       lhs;
-	RealVector<SolverType<S>>       rhs;
-	vector<Index>                   boundary_points;
-	static constexpr double         tol = Eigen::NumTraits<double>::dummy_precision();
+class ConstrainedMiniballSolver {
+	const RealMatrix<SolverScalarType> A, points;
+	const RealVector<SolverScalarType> b;
+	RealMatrix<SolverScalarType>       lhs;
+	RealVector<SolverScalarType>       rhs;
+	vector<Index>                      boundary_points;
+	static constexpr double            tol = Eigen::NumTraits<double>::dummy_precision();
 
 	/* Add a constraint to the helper corresponding to
 	requiring that the bounding ball pass through the point p. */
@@ -139,142 +125,99 @@ template <SolverMethod S> class ConstrainedMiniballSolver {
 		}
 	}
 
-	tuple<RealVector<SolutionType<S>>, SolutionType<S>, bool> solve_intermediate();
+	tuple<RealVector<SolutionScalarType>, SolutionScalarType, bool> solve_intermediate() {
+		RealVector<SolutionScalarType> p0(points.rows());
+		if (boundary_points.size() == 0) {
+			p0 = RealVector<SolutionScalarType>::Zero(points.rows());
+		} else {
+			p0 = points(Eigen::all, boundary_points[0])
+			         .template cast<SolutionScalarType>();  // from SolverExactType
+		}
+		if (A.rows() == 0 && boundary_points.size() <= 1) {
+			return tuple{p0, static_cast<SolutionScalarType>(0.0), true};
+		} else {
+			setup_equations();
+			QuadraticProgram qp(CGAL::EQUAL,
+			                    false,
+			                    SolverScalarType(0),
+			                    false,
+			                    SolverScalarType(0));
+			for (int i = 0; i < lhs.rows(); i++) {
+				qp.set_b(i, rhs(i));
+				for (int j = 0; j < lhs.cols(); j++) {
+					// intentional transpose
+					// see CGAL API
+					// https://doc.cgal.org/latest/QP_solver/classCGAL_1_1Quadratic__program.html
+					qp.set_a(j, i, lhs(i, j));
+				}
+			}
+			for (int j = 0; j < lhs.cols(); j++) {
+				qp.set_d(j, j, 2);
+			}
+			QuadraticProgramSolution soln = CGAL::solve_quadratic_program(qp, SolverScalarType());
+			bool success = soln.solves_quadratic_program(qp) && !soln.is_infeasible();
+			assert(success && "QP solver failed");
+			SolutionScalarType sqRadius = 0.0;
+			if (boundary_points.size() > 0) {
+				sqRadius = soln.objective_value();
+			}
+			RealVector<SolutionScalarType> c(points.rows());
+			for (auto [i, j] = tuple{soln.variable_values_begin(), c.begin()};
+			     i != soln.variable_values_end();
+			     i++, j++) {
+				*j = *i;
+			}
+			return tuple{(c + p0).eval(), sqRadius, success};
+		}
+	}
 
   public:
 	// initialise the helper with the affine constraint Ax = b
 	// dimension explicitly passed in because A and b can be empty
-	template <MatrixXdExpr points_t, MatrixXdExpr A_t, VectorXdExpr b_t>
-	ConstrainedMiniballSolver(const MatrixBase<points_t>& points,
-	                          const MatrixBase<A_t>&      A,
-	                          const MatrixBase<b_t>&      b) :
-		points(points.eval().template cast<SolverType<S>>()),
-		A(A.eval().template cast<SolverType<S>>()),
-		b(b.eval().template cast<SolverType<S>>()) {
-		assert(A.cols() == points.rows() &&  "A.cols() != points.rows()");
+	template <RealMatrixExpr<SolverScalarType> points_t,
+	          RealMatrixExpr<SolverScalarType> A_t,
+	          RealVectorExpr<SolverScalarType> b_t>
+	ConstrainedMiniballSolver(const points_t& points, const A_t& A, const b_t& b) :
+		points(points.eval()),
+		A(A.eval()),
+		b(b.eval()) {
+		assert(A.cols() == points.rows() && "A.cols() != points.rows()");
 		assert(A.rows() == b.rows() && "A.rows() != b.rows()");
 	}
 
-	tuple<RealVector<SolutionType<S>>, SolutionType<S>, bool> solve(vector<Index>& X_idx);
+	/* Compute the ball of minimum radius that bounds the points in X_idx
+	 * and contains the points of Y_idx on its boundary, while respecting
+	 * the affine constraints present in helper */
+	tuple<RealVector<SolutionScalarType>, SolutionScalarType, bool> solve(vector<Index>& X_idx) {
+		if (X_idx.size() == 0 || subspace_rank() == 0) {
+			// if there are no points to bound or if the constraints determine a
+			// unique point, then compute the point of minimum norm
+			// that satisfies the constraints
+			return solve_intermediate();
+		}
+		// find the constrained miniball of all except the last point
+		Index i = X_idx.back();
+		X_idx.pop_back();
+		auto [centre, sqRadius, success] = solve(X_idx);
+		auto sqDistance =
+			(points.col(i).template cast<SolutionScalarType>() - centre).squaredNorm();
+		if (sqDistance > sqRadius) {
+			// if the last point does not lie in the computed bounding ball,
+			// add it to the list of points that will lie on the boundary of the
+			// eventual ball. This determines a new constraint.
+			add_point(i);
+			// compute a bounding ball with the new constraint
+			std::tie(centre, sqRadius, success) = solve(X_idx);
+			// undo the addition of the last point
+			// this matters in nested calls to this function
+			// because we assume that the function does not mutate its arguments
+			remove_last_point();
+		}
+		X_idx.push_back(i);
+		return tuple{centre, sqRadius, success};
+	}
 };
-}  // namespace
-
-template <>
-inline tuple<VectorXd, double, bool>
-ConstrainedMiniballSolver<SolverMethod::PSEUDOINVERSE>::solve_intermediate() {
-	VectorXd p0(points.rows());
-	if (boundary_points.size() == 0) {
-		p0 = VectorXd::Zero(points.rows());
-	} else {
-		p0 = points(Eigen::all, boundary_points[0]);
-	}
-	if (A.rows() == 0 && boundary_points.size() <= 1) {
-		// if there are no linear constraints and at most one point,
-		// then we just return the ball of radius zero passing through
-		// the point if it exists, or the ball of radius zero at the origin
-		// if the point does not exist.
-		// Note that the program logic guarantees that p0 = 0
-		// if num_points == 0 so the following is valid
-		return tuple{p0, 0.0, true};
-	} else {
-		// Otherwise we need to solve the system Mx = v.
-		// We need to compute the vector v, since we did not
-		// compute the entries when adding the points.
-		// We also need to account for the fact that we have
-		// translated everything so that p0 is origin.
-		// note that if num_points == 0 then b - M*p0 has 0 rows and is
-		// still valid
-		setup_equations();
-		// We need to find the solution to Mx = v, where x is the
-		// solution having the least norm.
-		VectorXd c        = lhs.completeOrthogonalDecomposition().pseudoInverse() * rhs;
-		double   sqRadius = 0.0;
-		bool     success  = (lhs * c - rhs).isZero(tol);
-		assert(success && "Pseudo-inverse solver failed");
-		if (boundary_points.size() > 0) {
-			sqRadius = c.squaredNorm();
-		}
-		return tuple{(c + p0).eval(), sqRadius, success};
-	}
-}
-
-template <>
-inline tuple<RealVector<ExactSolutionType>, ExactSolutionType, bool>
-ConstrainedMiniballSolver<SolverMethod::QP_SOLVER>::solve_intermediate() {
-	using VectorXe = RealVector<ExactSolutionType>;
-	VectorXe p0(points.rows());
-	if (boundary_points.size() == 0) {
-		p0 = VectorXe::Zero(points.rows());
-	} else {
-		p0 = points(Eigen::all, boundary_points[0])
-		         .template cast<ExactSolutionType>();  // from SolverExactType
-	}
-	if (A.rows() == 0 && boundary_points.size() <= 1) {
-		return tuple{p0, static_cast<ExactSolutionType>(0.0), true};
-	} else {
-		setup_equations();
-		QuadraticProgram qp(CGAL::EQUAL, false, SolverExactType(0), false, SolverExactType(0));
-		for (int i = 0; i < lhs.rows(); i++) {
-			qp.set_b(i, rhs(i));
-			for (int j = 0; j < lhs.cols(); j++) {
-				// intentional transpose
-				// see CGAL API
-				// https://doc.cgal.org/latest/QP_solver/classCGAL_1_1Quadratic__program.html
-				qp.set_a(j, i, lhs(i, j));
-			}
-		}
-		for (int j = 0; j < lhs.cols(); j++) {
-			qp.set_d(j, j, 2);
-		}
-		QuadraticProgramSolution soln = CGAL::solve_quadratic_program(qp, SolverExactType());
-		bool success                  = soln.solves_quadratic_program(qp) && !soln.is_infeasible();
-		assert(success && "QP solver failed");
-		ExactSolutionType sqRadius = 0.0;
-		if (boundary_points.size() > 0) {
-			sqRadius = soln.objective_value();
-		}
-		VectorXe c(points.rows());
-		for (auto [i, j] = tuple{soln.variable_values_begin(), c.begin()};
-		     i != soln.variable_values_end();
-		     i++, j++) {
-			*j = *i;
-		}
-		return tuple{(c + p0).eval(), sqRadius, success};
-	}
-}
-
-/* Compute the ball of minimum radius that bounds the points in X_idx
- * and contains the points of Y_idx on its boundary, while respecting
- * the affine constraints present in helper */
-template <SolverMethod S>
-tuple<RealVector<SolutionType<S>>, SolutionType<S>, bool>
-ConstrainedMiniballSolver<S>::solve(vector<Index>& X_idx) {
-	if (X_idx.size() == 0 || subspace_rank() == 0) {
-		// if there are no points to bound or if the constraints determine a
-		// unique point, then compute the point of minimum norm
-		// that satisfies the constraints
-		return solve_intermediate();
-	}
-	// find the constrained miniball of all except the last point
-	Index i = X_idx.back();
-	X_idx.pop_back();
-	auto [centre, sqRadius, success] = solve(X_idx);
-	auto sqDistance = (points.col(i).template cast<SolutionType<S>>() - centre).squaredNorm();
-	if (sqDistance > sqRadius) {
-		// if the last point does not lie in the computed bounding ball,
-		// add it to the list of points that will lie on the boundary of the
-		// eventual ball. This determines a new constraint.
-		add_point(i);
-		// compute a bounding ball with the new constraint
-		std::tie(centre, sqRadius, success) = solve(X_idx);
-		// undo the addition of the last point
-		// this matters in nested calls to this function
-		// because we assume that the function does not mutate its arguments
-		remove_last_point();
-	}
-	X_idx.push_back(i);
-	return tuple{centre, sqRadius, success};
-}
+}  // namespace detail
 
 /*
 CONSTRAINED MINIBALL ALGORITHM
@@ -305,9 +248,13 @@ on the order of magnitude of 1e-5 for float, 1e-12 for double, and 1e-15 for
 long double.
 
 */
-template <SolverMethod S, MatrixXdExpr X_t, MatrixXdExpr A_t, VectorXdExpr b_t>
-tuple<VectorXd, double, bool>
-constrained_miniball(const MatrixBase<X_t>& X, const MatrixBase<A_t>& A, const MatrixBase<b_t>& b) {
+template <detail::MatrixExpr X_t, detail::MatrixExpr A_t, detail::VectorExpr b_t>
+	requires std::same_as<typename X_t::Scalar, typename A_t::Scalar> &&
+             std::same_as<typename A_t::Scalar, typename b_t::Scalar>
+std::tuple<detail::RealVector<SolutionScalarType>, SolutionScalarType, bool>
+constrained_miniball(const X_t& X, const A_t& A, const b_t& b) {
+	using namespace detail;
+	using Real_t = X_t::Scalar;
 	assert(A.rows() == b.rows() && "A.rows() != b.rows()");
 	assert(A.cols() == X.rows() && "A.cols() != X.rows()");
 	vector<Index> X_idx(X.cols());
@@ -317,23 +264,10 @@ constrained_miniball(const MatrixBase<X_t>& X, const MatrixBase<A_t>& A, const M
 	std::shuffle(X_idx.begin(), X_idx.end(), rd);
 
 	// Get the result
-	ConstrainedMiniballSolver<S> solver(X, A, b);
-	RealVector<SolutionType<S>>  centre(X.rows());
-	SolutionType<S>              sqRadius;
-	bool                         success;
-	std::tie(centre, sqRadius, success) = solver.solve(X_idx);
-
-	// type conversion if necessary
-	if constexpr (S == SolverMethod::PSEUDOINVERSE) {
-		return tuple{centre, sqRadius, success};
-	} else {
-		VectorXd centre_d(X.rows());
-		for (int i = 0; i < X.rows(); i++) {
-			centre_d(i) = CGAL::to_double(centre(i));
-		}
-		double sqRadius_d = CGAL::to_double(sqRadius);
-		return tuple{centre_d, sqRadius_d, success};
-	}
+	ConstrainedMiniballSolver solver(X.template cast<SolverScalarType>(),
+	                                 A.template cast<SolverScalarType>(),
+	                                 b.template cast<SolverScalarType>());
+	return solver.solve(X_idx);
 }
 
 /* MINIBALL ALGORITHM
@@ -353,7 +287,31 @@ minimum radius bounding every point in X.
 -   a boolean flag that is true if the solution is known to be correct to within
 machine precision.
 */
-template <SolverMethod S, MatrixXdExpr X_t> tuple<VectorXd, double, bool> miniball(const MatrixBase<X_t>& X) {
-	return constrained_miniball<S>(X, MatrixXd(0, X.rows()), VectorXd(0));
+template <detail::MatrixExpr X_t>
+std::tuple<detail::RealVector<SolutionScalarType>, SolutionScalarType, bool>
+miniball(const X_t& X) {
+	using namespace detail;
+	using Real_t = X_t::Scalar;
+	using Mat    = Matrix<Real_t, Eigen::Dynamic, Eigen::Dynamic>;
+	using Vec    = Vector<Real_t, Eigen::Dynamic>;
+	return constrained_miniball(X, Mat(0, X.rows()), Vec(0));
 }
+
+template <detail::MatrixExpr T>
+std::tuple<detail::RealMatrix<typename T::Scalar>, detail::RealVector<typename T::Scalar>>
+equidistant_subspace(const T& X) {
+	using namespace detail;
+	using Real_t         = T::Scalar;
+	int                n = X.cols();
+	RealMatrix<Real_t> E(n - 1, X.rows());
+	RealVector<Real_t> b(n - 1);
+	if (n > 1) {
+		b = static_cast<Real_t>(0.5) *
+		    (X.rightCols(n - 1).colwise().squaredNorm().array() - X.col(0).squaredNorm())
+		        .transpose();
+		E = (X.rightCols(n - 1).colwise() - X.col(0)).transpose();
+	}
+	return tuple{E, b};
+}
+
 }  // namespace cmb

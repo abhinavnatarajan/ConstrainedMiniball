@@ -34,72 +34,71 @@
     along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 #include "../cmb.hpp"
+
 #include <Eigen/Dense>
+
 #include <cmath>
 #include <iostream>
-#include <numbers>
 #include <tuple>
 #include <vector>
 
-using std::cerr, std::endl, std::vector, std::tie, std::tuple, std::min, std::abs,
-	std::sin, std::numbers::pi;
+using std::cerr, std::endl;
+
+namespace cmb {
+namespace test {
+using std::tie, std::tuple, std::vector, std::min, std::abs;
 
 using Eigen::NoChange, Eigen::all, Eigen::MatrixXd, Eigen::VectorXd;
 
-using cmb::constrained_miniball, cmb::MatrixXdExpr, cmb::SolverMethod;
-using enum SolverMethod;
-
-template <MatrixXdExpr T> tuple<MatrixXd, VectorXd> equidistant_subspace(const T& X) {
-	int      n = X.cols();
-	MatrixXd E(n - 1, X.rows());
-	VectorXd b(n - 1);
-	if (n > 1) {
-		b = 0.5 * (X.rightCols(n - 1).colwise().squaredNorm().array() - X.col(0).squaredNorm())
-		              .transpose();
-		E = (X.rightCols(n - 1).colwise() - X.col(0)).transpose();
-	}
-	return tuple{E, b};
-}
-
-template <typename T> bool approx_equal(const T& a, const T& b) {
-	static constexpr T eps     = static_cast<T>(1e-4);
-	static constexpr T abs_eps = static_cast<T>(1e-12);
+template <typename T>
+bool approx_equal(const T& a, const T& b, const T& rel_tol, const T& abs_tol) {
+	using namespace detail;
 	if (a != static_cast<T>(0) && b != static_cast<T>(0)) {
-		return (abs(a - b) <= eps * min(a, b));
+		return (abs(a - b) <= rel_tol * min(a, b));
 	} else {
-		return (abs(a - b) <= abs_eps);
+		return (abs(a - b) <= abs_tol);
 	}
 }
 
-template <SolverMethod S>
-void execute_test(MatrixXd& X,
-                  MatrixXd& A,
-                  VectorXd& b,
-                  VectorXd& correct_centre,
-                  double&   correct_sqRadius) {
-
-	cerr << "X :" << endl;
-	cerr << X << endl;
-	cerr << "A :" << endl;
-	cerr << A << endl;
-	cerr << "b^T :" << endl;
-	cerr << b.transpose().eval() << endl;
-	auto [centre, sqRadius, success] = constrained_miniball<S>(X, A, b);
-	cerr << "Solution found: " << (success ? "true" : "false") << endl;
-	cerr << "Expected centre :" << endl;
-	cerr << correct_centre.transpose().eval() << endl;
-	cerr << "Centre :" << endl;
-	cerr << centre.transpose().eval() << endl;
-	cerr << "Delta centre (squared norm) :" << endl;
-	cerr << (centre - correct_centre).squaredNorm() << endl;
+template <class T>
+void execute_test(const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>& X,
+                  const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>& A,
+                  const Eigen::Vector<T, Eigen::Dynamic>&                 b,
+                  const Eigen::Vector<T, Eigen::Dynamic>&                 correct_centre,
+                  const T&                                                correct_sqRadius) {
+	// cerr << "X :" << endl;
+	// cerr << X << endl;
+	// cerr << "A :" << endl;
+	// cerr << A << endl;
+	// cerr << "b^T :" << endl;
+	// cerr << b.transpose().eval() << endl;
+	auto [centre, sqRadius, success] = constrained_miniball(X, A, b);
+	cerr << "Solution found : " << (success ? "true" : "false") << endl;
+	// cerr << "Expected centre :" << endl;
+	// cerr << correct_centre.transpose().eval() << endl;
+	// cerr << "Centre :" << endl;
+	// cerr << centre.transpose().eval() << endl;
+	cerr << "Error in centre (squared norm) :" << endl;
+	SolutionScalarType err_centre =
+		(centre - correct_centre.template cast<SolutionScalarType>()).squaredNorm();
+	cerr << err_centre << endl;
 	cerr << "Expected squared radius :" << endl;
 	cerr << correct_sqRadius << endl;
 	cerr << "Squared radius :" << endl;
 	cerr << sqRadius << endl;
-	cerr << "Delta radius :" << endl;
-	cerr << abs(sqRadius - correct_sqRadius) << endl;
+	cerr << "Squared radius error :" << endl;
+	SolutionScalarType err_radius =
+		abs(sqRadius - static_cast<SolutionScalarType>(correct_sqRadius));
+	cerr << err_radius << endl;
 	assert(success && "Solution not found");
-	assert((approx_equal((centre - correct_centre).norm(), 0.0) && "Centre not correct"));
-	assert((approx_equal(sqRadius, correct_sqRadius) && "Squared radius not correct"));
+	const SolutionScalarType& rel_tol = static_cast<SolutionScalarType>(1e-4);
+	const SolutionScalarType& abs_tol = static_cast<SolutionScalarType>(1e-12);
+	const SolutionScalarType  zero    = static_cast<SolutionScalarType>(0.0);
+	assert((approx_equal<SolutionScalarType>(err_centre, zero, rel_tol, abs_tol) &&
+	        "Centre not correct"));
+	assert((approx_equal<SolutionScalarType>(err_radius, zero, rel_tol, abs_tol) &&
+	        "Squared radius not correct"));
 	cerr << endl;
 }
+}  // namespace test
+}  // namespace cmb
