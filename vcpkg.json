@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "cmb",
   "version": "2.0.0",
-  "builtin-baseline": "f61a294e765b257926ae9e9d85f96468a0af74e7",
+  "builtin-baseline": "7ef9d0ddfe2ed9d931923867776277486d4e137a",
   "dependencies": [
     {
       "name": "cgal",
