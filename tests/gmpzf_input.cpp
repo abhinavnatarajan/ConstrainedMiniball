@@ -4,23 +4,29 @@
 
 #include <CGAL/Gmpzf.h>
 
-int main() {
-	using cmb::test::execute_test, std::sin, std::numbers::pi;
+int main(int argc, char* argv[]) {
+	using cmb::test::start_test;
+	using std::cerr, std::endl;
+
+	// Test params
+	using std::sin, std::numbers::pi;
+	cerr << "Points: 3 points exactly on the unit circle in the z=0 plane in 3D" << endl;
+	cerr << "Constraints: z=1 plane" << endl;
 	using MatrixXe = Eigen::Matrix<CGAL::Gmpzf, Eigen::Dynamic, Eigen::Dynamic>;
 	using VectorXe = Eigen::Vector<CGAL::Gmpzf, Eigen::Dynamic>;
 	const MatrixXe X{
-		{1.0,            -0.5,            -0.5},
-		{0.0, sin(2 * pi / 3), sin(4 * pi / 3)},
-		{0.0,             0.0,             0.0}
+		{1.0, 0.0, -1.0},
+		{0.0, 1.0,  0.0},
+		{0.0, 0.0,  0.0}
     };
 	const MatrixXe A{
-	{ 0.0, 0.0, 1.0 }
-	};
+		{0.0, 0.0, 1.0}
+    };
 	const VectorXe b{{1.0}};
 	const VectorXe correct_centre{
 		{0.0, 0.0, 1.0}
     };
 	const CGAL::Gmpzf correct_sqRadius(2.0);
-	execute_test(X, A, b, correct_centre, correct_sqRadius);
+	start_test(argc, argv, X, A, b, correct_centre, correct_sqRadius);
 	return 0;
 }

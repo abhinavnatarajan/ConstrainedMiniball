@@ -3,9 +3,12 @@
 #include <cmath>
 #include <numbers>
 
-int main() {
-	// Test 1
-	using std::sin, std::numbers::pi, cmb::test::execute_test, cmb::equidistant_subspace;
+int main(int argc, char* argv[]) {
+	using cmb::test::start_test;
+	using std::cerr, std::endl;
+
+	// Test params
+	using std::sin, std::numbers::pi, cmb::equidistant_subspace;
 	cerr << "Point set: 3 equidistant points on the unit circle in the xy-plane in 2D" << endl;
 	cerr << "Constraint: the origin" << endl;
 	const Eigen::MatrixXd X{
@@ -18,6 +21,6 @@ int main() {
 		{0.0, 0.0}
     };
 	const double correct_sqRadius = 1.0;
-	execute_test(X, A, b, correct_centre, correct_sqRadius);
+	start_test(argc, argv, X, A, b, correct_centre, correct_sqRadius);
 	return 0;
 }

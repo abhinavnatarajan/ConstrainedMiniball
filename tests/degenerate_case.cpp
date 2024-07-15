@@ -3,9 +3,12 @@
 #include <cmath>
 #include <numbers>
 
-int main() {
-	using std::sin, std::numbers::pi, cmb::test::execute_test;
-	// Test 1
+int main(int argc, char* argv[]) {
+	using cmb::test::start_test;
+	using std::cerr, std::endl;
+
+	// Test params
+	using std::sin, std::numbers::pi;
 	cerr << "Point set: 3 points exactly on the unit circle in the xy-plane in 3D" << endl;
 	cerr << "Constraints: x=y=0 line" << endl;
 	const Eigen::MatrixXd X{
@@ -23,6 +26,7 @@ int main() {
 		{0.0, 0.0, 0.0}
     };
 	const double correct_sqRadius(1.0);
-	execute_test(X, A, b, correct_centre, correct_sqRadius);
+
+	start_test(argc, argv, X, A, b, correct_centre, correct_sqRadius);
 	return 0;
 }

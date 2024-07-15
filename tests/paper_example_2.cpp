@@ -2,9 +2,11 @@
 
 #include <vector>
 
-int main() {
-	// Test 3
-	using cmb::equidistant_subspace, cmb::test::execute_test;
+int main(int argc, char* argv[]) {
+	using cmb::test::start_test;
+
+	// Test params
+	using cmb::equidistant_subspace;
 	const Eigen::MatrixXd X{
 		{1.0, 2.0, 3.0,  2.0},
 		{4.0, 3.0, 1.0, -2.0},
@@ -14,6 +16,6 @@ int main() {
 		{-0.2, 0.4}
     };
 	const double correct_sqRadius{14.4};
-	execute_test(X, A, b, correct_centre, correct_sqRadius);
+	start_test(argc, argv, X, A, b, correct_centre, correct_sqRadius);
 	return 0;
 }

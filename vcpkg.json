@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "cmb",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "builtin-baseline": "f61a294e765b257926ae9e9d85f96468a0af74e7",
   "dependencies": [
     {
