@@ -125,7 +125,7 @@ class ConstrainedMiniballSolver {
 		} else {
 			rhs.topRows(A.rows()) = b - A * points(Eigen::all, boundary_points[0]);
 			if (num_point_constraints > 0) {
-				auto temp = points(Eigen::all, boundary_points).transpose();
+				auto&& temp = points(Eigen::all, boundary_points).transpose();
 				lhs.bottomRows(num_point_constraints) =
 					temp.bottomRows(num_point_constraints).rowwise() - temp.row(0);
 				rhs.bottomRows(num_point_constraints) =
@@ -201,8 +201,8 @@ class ConstrainedMiniballSolver {
 		// find the constrained miniball of all except the last point
 		Index i = X_idx.back();
 		X_idx.pop_back();
-		auto [centre, sqRadius, success] = solve(X_idx);
-		auto sqDistance = (points.col(i).template cast<SolutionExactType>() - centre).squaredNorm();
+		auto&& [centre, sqRadius, success] = solve(X_idx);
+		auto&& sqDistance = (points.col(i).template cast<SolutionExactType>() - centre).squaredNorm();
 		if (sqDistance > sqRadius) {
 			// if the last point does not lie in the computed bounding ball,
 			// add it to the list of points that will lie on the boundary of the
@@ -253,10 +253,9 @@ constrained_miniball(const X_t& points, const A_t& A, const b_t& b) {
 	assert(A.rows() == b.rows() && "A.rows() != b.rows()");
 	assert(A.cols() == points.rows() && "A.cols() != X.rows()");
 	vector<Index> X_idx(points.cols());
-	std::iota(X_idx.begin(), X_idx.end(), static_cast<Index>(0));
+	std::iota(X_idx.begin(), X_idx.end(), 0);
 	// shuffle the points
-	std::random_device rd;
-	std::shuffle(X_idx.begin(), X_idx.end(), rd);
+	std::shuffle(X_idx.begin(), X_idx.end(), std::random_device());
 
 	// Get the result
 	ConstrainedMiniballSolver solver(points.template cast<Gmpzf>(),
