@@ -6,7 +6,7 @@ auto main(int argc, char* argv[]) -> int {
 	using cmb::test::start_test;
 
 	// Test params
-	using cmb::equidistant_subspace;
+	using cmb::utility::equidistant_subspace;
 	const Eigen::MatrixXd X{
 		{1.0, 2.0, 3.0,  2.0},
 		{4.0, 3.0, 1.0, -2.0},

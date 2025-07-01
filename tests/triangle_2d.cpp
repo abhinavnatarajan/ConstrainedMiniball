@@ -8,7 +8,7 @@ auto main(int argc, char* argv[]) -> int {
 	using std::cerr, std::endl;
 
 	// Test params
-	using std::sin, std::numbers::pi, cmb::equidistant_subspace;
+	using std::sin, std::numbers::pi, cmb::utility::equidistant_subspace;
 	cerr << "Point set: 3 equidistant points on the unit circle in the xy-plane in 2D" << '\n';
 	cerr << "Constraint: the origin" << '\n';
 	const Eigen::MatrixXd X{

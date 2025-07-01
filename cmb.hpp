@@ -251,6 +251,78 @@ class ConstrainedMiniballSolver {
 };
 }  // namespace detail
 
+namespace utility {
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-array-to-pointer-decay)
+// Class to perform weakly monotonic conversion from CGAL::Quotient<CGAL::Gmpzf> to double.
+class ToDouble {
+	mpq_t m_value;
+
+  public:
+	ToDouble() {  // NOLINT(cppcoreguidelines-pro-type-member-init)
+		mpq_init(m_value);
+	}
+
+	auto operator()(const CGAL::Quotient<CGAL::Gmpzf>& x) -> double {
+		const CGAL::Gmpzf& num = x.numerator();
+		const CGAL::Gmpzf& den = x.denominator();
+
+		auto num_man = num.man();
+		auto num_exp = num.exp();
+
+		auto den_man = den.man();
+		auto den_exp = den.exp();
+
+		// The value is (num.man / den.man) * 2^(num.exp - den.exp).
+		// We compute this using GMP's rational numbers for exactness.
+
+		mpq_set_num(m_value, num_man);
+		mpq_set_den(m_value, den_man);
+
+		auto exp_diff = num_exp - den_exp;
+
+		if (exp_diff > 0) {
+			mpq_mul_2exp(m_value, m_value, exp_diff);
+		} else if (exp_diff < 0) {
+			mpq_div_2exp(m_value, m_value, -exp_diff);
+		}
+
+		double result = mpq_get_d(m_value);
+
+		return result;
+	}
+
+	~ToDouble() {
+		mpq_clear(m_value);
+	}
+
+	ToDouble(const ToDouble&)       = delete;
+	ToDouble(ToDouble&&)            = delete;
+	void operator=(const ToDouble&) = delete;
+	void operator=(ToDouble&&)      = delete;
+};
+
+// NOLINTEND(cppcoreguidelines-pro-bounds-array-to-pointer-decay)
+template <detail::MatrixExpr T>
+auto equidistant_subspace(const T& X)
+	-> std::tuple<detail::RealMatrix<typename T::Scalar>, detail::RealVector<typename T::Scalar>> {
+	using detail::RealMatrix;
+	using detail::RealVector;
+	using std::tuple;
+	using Real_t         = T::Scalar;
+	int                n = X.cols();
+	RealMatrix<Real_t> E(n - 1, X.rows());
+	RealVector<Real_t> b(n - 1);
+	if (n > 1) {
+		b = static_cast<Real_t>(0.5) *
+		    (X.rightCols(n - 1).colwise().squaredNorm().array() - X.col(0).squaredNorm())
+		        .transpose();
+		E = (X.rightCols(n - 1).colwise() - X.col(0)).transpose();
+	}
+	return tuple{E, b};
+}
+
+}  // namespace utility
+
 /*
 CONSTRAINED MINIBALL ALGORITHM
 Returns the sphere of minimum radius that bounds all points in X,
@@ -285,6 +357,8 @@ auto constrained_miniball(const X_t& points, const A_t& A, const b_t& b)
 	using detail::VectorXd;
 	using std::tuple;
 	using std::vector;
+	using utility::ToDouble;
+
 	using Real_t = X_t::Scalar;
 	assert(A.rows() == b.rows() && "A.rows() != b.rows()");
 	assert(A.cols() == points.rows() && "A.cols() != X.rows()");
@@ -302,12 +376,13 @@ auto constrained_miniball(const X_t& points, const A_t& A, const b_t& b)
 	if constexpr (S == SolutionPrecision::EXACT) {
 		return solver.solve(X_idx);
 	} else {
+		auto to_double                   = ToDouble();
 		auto [centre, sqRadius, success] = solver.solve(X_idx);
 		VectorXd centre_d(points.rows());
 		for (int i = 0; i < points.rows(); i++) {
-			centre_d[i] = CGAL::to_double(centre(i));
+			centre_d[i] = to_double(centre(i));
 		}
-		double sqRadius_d = CGAL::to_double(sqRadius);
+		double sqRadius_d = to_double(sqRadius);
 		return tuple{centre_d, sqRadius_d, success};
 	}
 }
@@ -337,25 +412,6 @@ auto miniball(const X_t& X)
 	using Mat    = Matrix<Real_t, Eigen::Dynamic, Eigen::Dynamic>;
 	using Vec    = Vector<Real_t, Eigen::Dynamic>;
 	return constrained_miniball<S>(X, Mat(0, X.rows()), Vec(0));
-}
-
-template <detail::MatrixExpr T>
-auto equidistant_subspace(const T& X)
-	-> std::tuple<detail::RealMatrix<typename T::Scalar>, detail::RealVector<typename T::Scalar>> {
-	using detail::RealMatrix;
-	using detail::RealVector;
-	using std::tuple;
-	using Real_t         = T::Scalar;
-	int                n = X.cols();
-	RealMatrix<Real_t> E(n - 1, X.rows());
-	RealVector<Real_t> b(n - 1);
-	if (n > 1) {
-		b = static_cast<Real_t>(0.5) *
-		    (X.rightCols(n - 1).colwise().squaredNorm().array() - X.col(0).squaredNorm())
-		        .transpose();
-		E = (X.rightCols(n - 1).colwise() - X.col(0)).transpose();
-	}
-	return tuple{E, b};
 }
 
 }  // namespace cmb
