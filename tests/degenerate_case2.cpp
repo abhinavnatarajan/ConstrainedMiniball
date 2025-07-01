@@ -15,7 +15,7 @@ auto main(int /*argc*/, char* /*argv*/[]) -> int {
 	};
 
 	auto&& [centre, sq_radius, success] = cmb::miniball<cmb::SolutionPrecision::EXACT>(X);
-	cerr << std::setprecision(std::numeric_limits<double>::max_digits10) << endl;
+	cerr << std::setprecision(std::numeric_limits<double>::max_digits10) << '\n';
 	// cerr << "Centre of the bounding sphere of the triangle: " << centre.template
 	// cast<double>().transpose() << '\n';
 	cerr << "Squared radius of the bounding sphere of the triangle: ";

@@ -1,3 +1,4 @@
+#include "../cmb.hpp"
 #include <CGAL/Gmpzf.h>
 #include <CGAL/Quotient.h>
 #include <cmath>
@@ -5,8 +6,8 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
-#include "../cmb.hpp"
 
+namespace {
 auto construct(std::stringstream& base, const int& e) -> CGAL::Gmpzf {
 	CGAL::Gmpz m;
 	base >> m;
@@ -14,6 +15,7 @@ auto construct(std::stringstream& base, const int& e) -> CGAL::Gmpzf {
 	CGAL::Gmpzf result_exp(pow(2, e));
 	return result_base * result_exp;
 }
+}  // namespace
 
 auto main() -> int {
 	using CGAL::Gmpzf, CGAL::Quotient;
