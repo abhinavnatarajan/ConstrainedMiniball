@@ -36,29 +36,30 @@
         along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 #pragma once
+#ifndef CMB_HPP
+	#define CMB_HPP
 
-#include <CGAL/Gmpzf.h>
-#include <CGAL/QP_functions.h>
-#include <CGAL/QP_models.h>
+	#include <CGAL/Gmpzf.h>
+	#include <CGAL/QP_functions.h>
+	#include <CGAL/QP_models.h>
 
-#include <Eigen/Dense>
+	#include <Eigen/Dense>
 
-#include <algorithm>
-#include <random>
-#include <tuple>
-#include <vector>
+	#include <algorithm>
+	#include <random>
+	#include <tuple>
+	#include <vector>
 
 namespace cmb {
 using SolutionExactType = CGAL::Quotient<CGAL::Gmpzf>;  // exact rational numbers
 
-enum SolutionPrecision {
+enum class SolutionPrecision : std::uint8_t {
 	EXACT,  // exact rational numbers
 	DOUBLE  // C++ doubles
 };
 
 template <SolutionPrecision S>
-using SolutionType =
-	std::conditional<S == SolutionPrecision::EXACT, SolutionExactType, double>::type;
+using SolutionType = std::conditional_t<S == SolutionPrecision::EXACT, SolutionExactType, double>;
 
 namespace detail {
 
@@ -86,87 +87,112 @@ using QuadraticProgram         = CGAL::Quadratic_program<Gmpzf>;
 using QuadraticProgramSolution = CGAL::Quadratic_program_solution<Gmpzf>;
 
 class ConstrainedMiniballSolver {
-	const RealMatrix<Gmpzf> A, points;
-	const RealVector<Gmpzf> b;
-	RealMatrix<Gmpzf>       lhs;
-	RealVector<Gmpzf>       rhs;
-	vector<Index>           boundary_points;
+	RealMatrix<Gmpzf>       m_A, m_points;  // not changed after construction
+	Index                   m_rank_A_ub, m_dim_points;
+	RealVector<Gmpzf>       m_b;
+	RealMatrix<Gmpzf>       m_lhs;
+	RealVector<Gmpzf>       m_rhs;
+	vector<Index>           m_boundary_points;
 	static constexpr double tol = Eigen::NumTraits<double>::dummy_precision();
 
-	/* Add a constraint to the helper corresponding to
-	requiring that the bounding ball pass through the point p. */
+	// Add a constraint to the helper corresponding to
+	// requiring that the bounding ball pass through the point p.
 	void add_point(Index& i) {
-		boundary_points.push_back(i);
+		m_boundary_points.push_back(i);
 	}
 
-	// remove the last point constraint that has been added to the system
-	// if there is only one point so far, just set it to 0
+	// Remove the last point constraint that has been added to the system.
+	// If there is only one point so far, just set it to 0.
 	void remove_last_point() {
-		boundary_points.pop_back();
+		m_boundary_points.pop_back();
 	}
 
-	// return the dimension of the affine subspace defined by the constraints
-	// TODO: this might not work if the constraints are not linearly independent
-	int subspace_rank() const {
-		return A.cols() - (A.rows() + boundary_points.size() - 1);
+	// Return a lower bound on the dimension of the affine subspace defined by the constraints.
+	// With high probability this function returns the actual subspace rank.
+	[[nodiscard]]
+	auto subspace_rank_lb() const -> Index {
+		// The static_cast below is safe because boundary_points never exceeds the number of points.
+		return std::max(
+			static_cast<Index>(0),
+			m_dim_points - m_rank_A_ub -
+				(static_cast<Index>(m_boundary_points.size()) - static_cast<Index>(1))
+		);
 	}
 
 	void setup_equations() {
-		int num_linear_constraints = A.rows();
-		int num_point_constraints  = max(static_cast<int>(boundary_points.size()) - 1, 0);
-		int total_num_constraints  = num_linear_constraints + num_point_constraints;
+		Index num_linear_constraints = m_A.rows();
+		Index num_point_constraints =
+			max(static_cast<Index>(m_boundary_points.size()) - 1, static_cast<Index>(0));
+		Index total_num_constraints = num_linear_constraints + num_point_constraints;
 		assert(total_num_constraints > 0 && "Need at least one constraint");
-		int dim = points.rows();
-		lhs.conservativeResize(total_num_constraints, dim);
-		rhs.conservativeResize(total_num_constraints, Eigen::NoChange);
-		lhs.topRows(A.rows()) = A;
-		if (boundary_points.size() == 0) {
-			rhs = b;
+		m_lhs.conservativeResize(total_num_constraints, m_dim_points);
+		m_rhs.conservativeResize(total_num_constraints, Eigen::NoChange);
+		m_lhs.topRows(m_A.rows()) = m_A;
+		if (m_boundary_points.size() == 0) {
+			m_rhs = m_b;
 		} else {
-			rhs.topRows(A.rows()) = b - A * points(Eigen::all, boundary_points[0]);
+			m_rhs.topRows(m_A.rows()) = m_b - m_A * m_points(Eigen::all, m_boundary_points[0]);
 			if (num_point_constraints > 0) {
-				auto&& temp = points(Eigen::all, boundary_points).transpose();
-				lhs.bottomRows(num_point_constraints) =
+				// temp = X^T
+				auto&& temp = m_points(Eigen::all, m_boundary_points).transpose();
+				m_lhs.bottomRows(num_point_constraints) =
+					// [x_i - x_0]^T_{i > 0}
 					temp.bottomRows(num_point_constraints).rowwise() - temp.row(0);
-				rhs.bottomRows(num_point_constraints) =
-					0.5 * lhs.bottomRows(num_point_constraints).rowwise().squaredNorm();
+				m_rhs.bottomRows(num_point_constraints) =
+					// [ 1/2 * |x_i - x_0|^2 ]_{i > 0}
+					0.5 * m_lhs.bottomRows(num_point_constraints).rowwise().squaredNorm();
 			}
 		}
 	}
 
-	tuple<RealVector<SolutionExactType>, SolutionExactType, bool> solve_intermediate() {
-		RealVector<SolutionExactType> p0(points.rows());
-		if (boundary_points.size() == 0) {
-			p0 = RealVector<SolutionExactType>::Zero(points.rows());
+	// Computes the minimum circumball of the points in m_boundary_points whose centre lies
+	// in the affine subspace defined by the constraints Ax = b.
+	// We do not assume that the equidistance subspace of the boundary points
+	// and the affine space defined by Ax = b are linearly independent, or even that A has full
+	// rank.
+	auto solve_intermediate() -> tuple<RealVector<SolutionExactType>, SolutionExactType, bool> {
+		// We translate the entire system by x_0,
+		// where x_0 is the first boundary point,
+		// to simplify the equations.
+		RealVector<SolutionExactType> p0(m_points.rows());
+		if (m_boundary_points.size() == 0) {
+			// No boundary points, no translation.
+			p0 = RealVector<SolutionExactType>::Zero(m_points.rows());
 		} else {
-			p0 = points(Eigen::all, boundary_points[0])
+			p0 = m_points(Eigen::all, m_boundary_points[0])
 			         .template cast<SolutionExactType>();  // from SolverExactType
 		}
-		if (A.rows() == 0 && boundary_points.size() <= 1) {
+
+		if (m_A.rows() == 0 && m_boundary_points.size() <= 1) {
+			// Only one point and no linear constraints;
+			// return circle of radius 0 at the point.
 			return tuple{p0, static_cast<SolutionExactType>(0.0), true};
 		} else {
 			setup_equations();
 			QuadraticProgram qp(CGAL::EQUAL, false, Gmpzf(0), false, Gmpzf(0));
-			for (int i = 0; i < lhs.rows(); i++) {
-				qp.set_b(i, rhs(i));
-				for (int j = 0; j < lhs.cols(); j++) {
+			// WARNING: COUNTER MIGHT OVERFLOW
+			for (int i = 0; i < m_lhs.rows(); i++) {
+				qp.set_b(i, m_rhs(i));
+				// WARNING: COUNTER MIGHT OVERFLOW
+				for (int j = 0; j < m_lhs.cols(); j++) {
 					// intentional transpose
 					// see CGAL API
 					// https://doc.cgal.org/latest/QP_solver/classCGAL_1_1Quadratic__program.html
-					qp.set_a(j, i, lhs(i, j));
+					qp.set_a(j, i, m_lhs(i, j));
 				}
 			}
-			for (int j = 0; j < lhs.cols(); j++) {
+			// WARNING: COUNTER MIGHT OVERFLOW
+			for (int j = 0; j < m_lhs.cols(); j++) {
 				qp.set_d(j, j, 2);
 			}
 			QuadraticProgramSolution soln = CGAL::solve_quadratic_program(qp, Gmpzf());
 			bool success = soln.solves_quadratic_program(qp) && !soln.is_infeasible();
 			assert(success && "QP solver failed");
 			SolutionExactType sqRadius = 0.0;
-			if (boundary_points.size() > 0) {
+			if (m_boundary_points.size() > 0) {
 				sqRadius = soln.objective_value();
 			}
-			RealVector<SolutionExactType> c(points.rows());
+			RealVector<SolutionExactType> c(m_points.rows());
 			for (auto [i, j] = tuple{soln.variable_values_begin(), c.begin()};
 			     i != soln.variable_values_end();
 			     i++, j++) {
@@ -177,42 +203,46 @@ class ConstrainedMiniballSolver {
 	}
 
   public:
-	// initialise the helper with the affine constraint Ax = b
-	// dimension explicitly passed in because A and b can be empty
+	// Initialise the helper with the affine constraint Ax = b.
 	template <RealMatrixExpr<Gmpzf> points_t, RealMatrixExpr<Gmpzf> A_t, RealVectorExpr<Gmpzf> b_t>
 	ConstrainedMiniballSolver(const points_t& points, const A_t& A, const b_t& b) :
-		points(points.eval()),
-		A(A.eval()),
-		b(b.eval()) {
+		m_points(points.eval()),
+		m_A(A.eval()),
+		m_b(b.eval()) {
 		assert(A.cols() == points.rows() && "A.cols() != points.rows()");
 		assert(A.rows() == b.rows() && "A.rows() != b.rows()");
+		m_boundary_points.reserve(static_cast<size_t>(points.rows()) + 1);
+		m_rank_A_ub  = A.rows();
+		m_dim_points = points.rows();
 	}
 
-	/* Compute the ball of minimum radius that bounds the points in X_idx
-	 * and contains the points of Y_idx on its boundary, while respecting
-	 * the affine constraints present in helper */
-	tuple<RealVector<SolutionExactType>, SolutionExactType, bool> solve(vector<Index>& X_idx) {
-		if (X_idx.size() == 0 || subspace_rank() == 0) {
-			// if there are no points to bound or if the constraints determine a
-			// unique point, then compute the point of minimum norm
-			// that satisfies the constraints
+	// Compute the ball of minimum radius that bounds the points in X_idx
+	// and contains the points of m_boundary_points on its boundary, while respecting
+	// the affine constraints present in helper.
+	auto solve(vector<Index>& X_idx)
+		-> tuple<RealVector<SolutionExactType>, SolutionExactType, bool> {
+		if (X_idx.size() == 0 || subspace_rank_lb() == 0) {
+			// If there are no points to bound or if the constraints are likely to
+			// determine a unique point, then compute the point of minimum norm
+			// that satisfies the constraints.
 			return solve_intermediate();
 		}
-		// find the constrained miniball of all except the last point
+		// Find the constrained miniball of all except the last point.
 		Index i = X_idx.back();
 		X_idx.pop_back();
 		auto&& [centre, sqRadius, success] = solve(X_idx);
-		auto&& sqDistance = (points.col(i).template cast<SolutionExactType>() - centre).squaredNorm();
+		auto&& sqDistance =
+			(m_points.col(i).template cast<SolutionExactType>() - centre).squaredNorm();
 		if (sqDistance > sqRadius) {
-			// if the last point does not lie in the computed bounding ball,
+			// If the last point does not lie in the computed bounding ball,
 			// add it to the list of points that will lie on the boundary of the
 			// eventual ball. This determines a new constraint.
 			add_point(i);
 			// compute a bounding ball with the new constraint
 			std::tie(centre, sqRadius, success) = solve(X_idx);
-			// undo the addition of the last point
-			// this matters in nested calls to this function
-			// because we assume that the function does not mutate its arguments
+			// Undo the addition of the last point.
+			// This matters in nested calls to this function
+			// because we assume that the function does not mutate its arguments.
 			remove_last_point();
 		}
 		X_idx.push_back(i);
@@ -240,15 +270,21 @@ minimum radius bounding every point in X.
 -   the squared radius of the bounding sphere.
 -   a boolean flag that is true if the solution is known to be correct.
 */
-template <SolutionPrecision  S,
-          detail::MatrixExpr X_t,
-          detail::MatrixExpr A_t,
-          detail::VectorExpr b_t>
+template <
+	SolutionPrecision  S,
+	detail::MatrixExpr X_t,
+	detail::MatrixExpr A_t,
+	detail::VectorExpr b_t>
 	requires std::same_as<typename X_t::Scalar, typename A_t::Scalar> &&
              std::same_as<typename A_t::Scalar, typename b_t::Scalar>
-std::tuple<detail::RealVector<SolutionType<S>>, SolutionType<S>, bool>
-constrained_miniball(const X_t& points, const A_t& A, const b_t& b) {
-	using namespace detail;
+auto constrained_miniball(const X_t& points, const A_t& A, const b_t& b)
+	-> std::tuple<detail::RealVector<SolutionType<S>>, SolutionType<S>, bool> {
+	using detail::ConstrainedMiniballSolver;
+	using detail::Gmpzf;
+	using detail::Index;
+	using detail::VectorXd;
+	using std::tuple;
+	using std::vector;
 	using Real_t = X_t::Scalar;
 	assert(A.rows() == b.rows() && "A.rows() != b.rows()");
 	assert(A.cols() == points.rows() && "A.cols() != X.rows()");
@@ -258,9 +294,11 @@ constrained_miniball(const X_t& points, const A_t& A, const b_t& b) {
 	std::shuffle(X_idx.begin(), X_idx.end(), std::random_device());
 
 	// Get the result
-	ConstrainedMiniballSolver solver(points.template cast<Gmpzf>(),
-	                                 A.template cast<Gmpzf>(),
-	                                 b.template cast<Gmpzf>());
+	ConstrainedMiniballSolver solver(
+		points.template cast<Gmpzf>(),
+		A.template cast<Gmpzf>(),
+		b.template cast<Gmpzf>()
+	);
 	if constexpr (S == SolutionPrecision::EXACT) {
 		return solver.solve(X_idx);
 	} else {
@@ -291,8 +329,10 @@ minimum radius bounding every point in X.
 -   a boolean flag that is true if the solution is known to be correct
 */
 template <SolutionPrecision S, detail::MatrixExpr X_t>
-std::tuple<detail::RealVector<SolutionType<S>>, SolutionType<S>, bool> miniball(const X_t& X) {
-	using namespace detail;
+auto miniball(const X_t& X)
+	-> std::tuple<detail::RealVector<SolutionType<S>>, SolutionType<S>, bool> {
+	using detail::Matrix;
+	using detail::Vector;
 	using Real_t = X_t::Scalar;
 	using Mat    = Matrix<Real_t, Eigen::Dynamic, Eigen::Dynamic>;
 	using Vec    = Vector<Real_t, Eigen::Dynamic>;
@@ -300,9 +340,11 @@ std::tuple<detail::RealVector<SolutionType<S>>, SolutionType<S>, bool> miniball(
 }
 
 template <detail::MatrixExpr T>
-std::tuple<detail::RealMatrix<typename T::Scalar>, detail::RealVector<typename T::Scalar>>
-equidistant_subspace(const T& X) {
-	using namespace detail;
+auto equidistant_subspace(const T& X)
+	-> std::tuple<detail::RealMatrix<typename T::Scalar>, detail::RealVector<typename T::Scalar>> {
+	using detail::RealMatrix;
+	using detail::RealVector;
+	using std::tuple;
 	using Real_t         = T::Scalar;
 	int                n = X.cols();
 	RealMatrix<Real_t> E(n - 1, X.rows());
@@ -317,3 +359,5 @@ equidistant_subspace(const T& X) {
 }
 
 }  // namespace cmb
+
+#endif  // CMB_HPP

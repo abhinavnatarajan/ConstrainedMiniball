@@ -40,20 +40,21 @@
 #include <CGAL/Quotient.h>
 
 #include <cmath>
+#include <iomanip>
 #include <iostream>
+#include <span>
 #include <type_traits>
 
-namespace cmb {
-namespace test {
+namespace cmb::test {
 
 using Eigen::NoChange, Eigen::all, Eigen::MatrixXd, Eigen::VectorXd;
 
-inline std::ostream& operator<<(std::ostream& s, const CGAL::Quotient<CGAL::Gmpzf>& r) {
+inline auto operator<<(std::ostream& s, const CGAL::Quotient<CGAL::Gmpzf>& r) -> std::ostream& {
 	return CGAL::print(CGAL::print(s, r.numerator()) << " / ", r.denominator());
 }
 
 template <typename T>
-bool approx_equal(const T& a, const T& b, const T& rel_tol, const T& abs_tol) {
+auto approx_equal(const T& a, const T& b, const T& rel_tol, const T& abs_tol) -> bool {
 	using std::abs, std::min;
 	if (a != static_cast<T>(0) && b != static_cast<T>(0)) {
 		return (abs(a - b) <= rel_tol * min(a, b));
@@ -63,20 +64,23 @@ bool approx_equal(const T& a, const T& b, const T& rel_tol, const T& abs_tol) {
 }
 
 template <SolutionPrecision S, class T>
-void run_test(const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>& X,
-              const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>& A,
-              const Eigen::Vector<T, Eigen::Dynamic>&                 b,
-              const Eigen::Vector<T, Eigen::Dynamic>&                 correct_centre,
-              const T&                                                correct_sqRadius) {
+void run_test(
+	const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>& X,
+	const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>& A,
+	const Eigen::Vector<T, Eigen::Dynamic>&                 b,
+	const Eigen::Vector<T, Eigen::Dynamic>&                 correct_centre,
+	const T&                                                correct_sqRadius
+) {
 	using soln_t  = SolutionType<S>;
 	using input_t = T;
 	// solution will never be downcast, only upcast
 	// common_t = (soln_t <= input_t) ? input_t : soln_t;
 	// where input_t is one of double, CGAL::Gmpzf
 	// soln_t is one of double, CGAL::Quotient<CGAL::Gmpzf>
-	using common_t = std::conditional<S == SolutionPrecision::DOUBLE, input_t, soln_t>::type;
+	using common_t = std::conditional_t<S == SolutionPrecision::DOUBLE, input_t, soln_t>;
 	using std::cerr, std::endl;
 
+	cerr << std::setprecision(std::numeric_limits<double>::max_digits10);
 	// cerr << "X :" << endl;
 	// cerr << X << endl;
 	// cerr << "A :" << endl;
@@ -110,23 +114,26 @@ void run_test(const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>& X,
 	cerr << err_radius << endl;
 
 	assert(success && "Solution not found");
-	const common_t rel_tol = static_cast<common_t>(1e-4);
-	const common_t abs_tol = static_cast<common_t>(1e-12);
-	const common_t zero    = static_cast<common_t>(0.0);
+	const auto rel_tol = static_cast<common_t>(1e-4);
+	const auto abs_tol = static_cast<common_t>(1e-12);
+	const auto zero    = static_cast<common_t>(0.0);
 	assert((approx_equal<common_t>(err_centre, zero, rel_tol, abs_tol) && "Centre not correct"));
-	assert((approx_equal<common_t>(err_radius, zero, rel_tol, abs_tol) &&
-	        "Squared radius not correct"));
+	assert(
+		(approx_equal<common_t>(err_radius, zero, rel_tol, abs_tol) && "Squared radius not correct")
+	);
 	cerr << endl;
 }
 
 template <class T>
-void start_test(int                                                     argc,
-                char*                                                   argv[],
-                const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>& X,
-                const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>& A,
-                const Eigen::Vector<T, Eigen::Dynamic>&                 b,
-                const Eigen::Vector<T, Eigen::Dynamic>&                 correct_centre,
-                const T&                                                correct_sqRadius) {
+void start_test(
+	int                                                     argc,
+	std::span<char*>                                        argv,
+	const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>& X,
+	const Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>& A,
+	const Eigen::Vector<T, Eigen::Dynamic>&                 b,
+	const Eigen::Vector<T, Eigen::Dynamic>&                 correct_centre,
+	const T&                                                correct_sqRadius
+) {
 	using std::cerr, std::endl;
 	if (argc > 1) {
 		if (std::string_view(argv[1]) == "EXACT") {
@@ -143,5 +150,4 @@ void start_test(int                                                     argc,
 	}
 }
 
-}  // namespace test
-}  // namespace cmb
+}  // namespace cmb::test

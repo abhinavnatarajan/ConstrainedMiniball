@@ -2,7 +2,7 @@
 
 #include <vector>
 
-int main(int argc, char* argv[]) {
+auto main(int argc, char* argv[]) -> int {
 	using cmb::test::start_test;
 
 	// Test params
@@ -14,8 +14,8 @@ int main(int argc, char* argv[]) {
 	const auto [A, b] = equidistant_subspace(X(Eigen::all, std::vector<int>{2, 3}));
 	const Eigen::VectorXd correct_centre{
 		{-0.2, 0.4}
-    };
+	};
 	const double correct_sqRadius{14.4};
-	start_test(argc, argv, X, A, b, correct_centre, correct_sqRadius);
+	start_test(argc, std::span<char*>(argv, argc), X, A, b, correct_centre, correct_sqRadius);
 	return 0;
 }
