@@ -35,6 +35,9 @@ if (DEFINED CGAL_MODULES_DIR AND Eigen3_FOUND)
     message(STATUS "CGAL has Eigen3 support.")
 endif()
 
+add_executable(example example.cpp)
+target_link_libraries(example PRIVATE Eigen3::Eigen CGAL::CGAL CGAL::Eigen3_support)
+
 file(GLOB test_files tests/*.cpp)
 foreach(file ${test_files})
     get_filename_component(name ${file} NAME_WE)
