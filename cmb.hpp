@@ -361,12 +361,11 @@ auto equidistant_subspace(const T& X) -> std::tuple<
 	int            n    = X.cols();
 	RealMatrix<Real_t, Rows, Cols> E(n - 1, X.rows());
 	RealVector<Real_t>             b(n - 1);
-	auto                           X_cast = X.template cast<Real_t>();
 	if (n > 1) {
 		b = static_cast<Real_t>(0.5) *
-		    (X_cast.rightCols(n - 1).colwise().squaredNorm().array() - X_cast.col(0).squaredNorm())
+		    (X.rightCols(n - 1).colwise().squaredNorm().array() - X.col(0).squaredNorm())
 		        .transpose();
-		E = (X_cast.rightCols(n - 1).colwise() - X_cast.col(0)).transpose();
+		E = (X.rightCols(n - 1).colwise() - X.col(0)).transpose();
 	}
 	return tuple{E, b};
 }
