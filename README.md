@@ -13,7 +13,7 @@ The problem can be solved in amortized $O(n)$ time by using Welzl's algorithm, w
 CMB is provided as a single header-only library `cmb.hpp`, and requires
 - C++20 compliant compiler with support for concepts (GCC 10.3, Clang 10, MSVC 2019 16.3 or later versions of these compilers).
 - The [Eigen C++ library](https://eigen.tuxfamily.org/index.php?title=Main_Page) (tested with version 3.4.0).
-- The [Computational Geometry Algorithms Library](https://cgal.org/) (tested with version 5.6.0).
+- The [Computational Geometry Algorithms Library](https://cgal.org/) (tested with version 6.0.1).
 - The [GNU Multiple Precision library](https://gmplib.org/) (tested with version 6.2.1).
 
 ## Example usage

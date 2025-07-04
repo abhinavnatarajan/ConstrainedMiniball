@@ -39,19 +39,20 @@
 #ifndef CMB_HPP
 	#define CMB_HPP
 
-	#include <CGAL/Gmpzf.h>
+	#include <algorithm>
+	#include <cstdio>
+	#include <random>
+	#include <tuple>
+	#include <vector>
+
+	#include <CGAL/Mpzf.h>
 	#include <CGAL/QP_functions.h>
 	#include <CGAL/QP_models.h>
 
 	#include <Eigen/Dense>
 
-	#include <algorithm>
-	#include <random>
-	#include <tuple>
-	#include <vector>
-
 namespace cmb {
-using SolutionExactType = CGAL::Quotient<CGAL::Gmpzf>;  // exact rational numbers
+using SolutionExactType = CGAL::Quotient<CGAL::Mpzf>;  // exact rational numbers
 
 enum class SolutionPrecision : std::uint8_t {
 	EXACT,  // exact rational numbers
@@ -63,7 +64,7 @@ using SolutionType = std::conditional_t<S == SolutionPrecision::EXACT, SolutionE
 
 namespace detail {
 
-using CGAL::Gmpzf;  // exact floats
+using CGAL::Mpzf;  // exact floats
 using std::tuple, std::max, std::vector, Eigen::MatrixBase, Eigen::Matrix, Eigen::Vector,
 	Eigen::MatrixXd, Eigen::VectorXd, Eigen::Index, std::same_as;
 
@@ -83,15 +84,15 @@ concept RealMatrixExpr = MatrixExpr<Derived> && same_as<typename Derived::Scalar
 template <class Derived, class Real_t>
 concept RealVectorExpr = VectorExpr<Derived> && same_as<typename Derived::Scalar, Real_t>;
 
-using QuadraticProgram         = CGAL::Quadratic_program<Gmpzf>;
-using QuadraticProgramSolution = CGAL::Quadratic_program_solution<Gmpzf>;
+using QuadraticProgram         = CGAL::Quadratic_program<Mpzf>;
+using QuadraticProgramSolution = CGAL::Quadratic_program_solution<Mpzf>;
 
 class ConstrainedMiniballSolver {
-	RealMatrix<Gmpzf>       m_A, m_points;  // not changed after construction
+	RealMatrix<Mpzf>        m_A, m_points;  // not changed after construction
 	Index                   m_rank_A_ub, m_dim_points;
-	RealVector<Gmpzf>       m_b;
-	RealMatrix<Gmpzf>       m_lhs;
-	RealVector<Gmpzf>       m_rhs;
+	RealVector<Mpzf>        m_b;
+	RealMatrix<Mpzf>        m_lhs;
+	RealVector<Mpzf>        m_rhs;
 	vector<Index>           m_boundary_points;
 	static constexpr double tol = Eigen::NumTraits<double>::dummy_precision();
 
@@ -140,7 +141,7 @@ class ConstrainedMiniballSolver {
 					temp.bottomRows(num_point_constraints).rowwise() - temp.row(0);
 				m_rhs.bottomRows(num_point_constraints) =
 					// [ 1/2 * |x_i - x_0|^2 ]_{i > 0}
-					0.5 * m_lhs.bottomRows(num_point_constraints).rowwise().squaredNorm();
+					Mpzf(0.5) * m_lhs.bottomRows(num_point_constraints).rowwise().squaredNorm();
 			}
 		}
 	}
@@ -169,7 +170,7 @@ class ConstrainedMiniballSolver {
 			return tuple{p0, static_cast<SolutionExactType>(0.0), true};
 		} else {
 			setup_equations();
-			QuadraticProgram qp(CGAL::EQUAL, false, Gmpzf(0), false, Gmpzf(0));
+			QuadraticProgram qp(CGAL::EQUAL, false, Mpzf(0), false, Mpzf(0));
 			// WARNING: COUNTER MIGHT OVERFLOW
 			for (int i = 0; i < m_lhs.rows(); i++) {
 				qp.set_b(i, m_rhs(i));
@@ -185,7 +186,7 @@ class ConstrainedMiniballSolver {
 			for (int j = 0; j < m_lhs.cols(); j++) {
 				qp.set_d(j, j, 2);
 			}
-			QuadraticProgramSolution soln = CGAL::solve_quadratic_program(qp, Gmpzf());
+			QuadraticProgramSolution soln = CGAL::solve_quadratic_program(qp, Mpzf());
 			bool success = soln.solves_quadratic_program(qp) && !soln.is_infeasible();
 			assert(success && "QP solver failed");
 			SolutionExactType sqRadius = 0.0;
@@ -204,7 +205,7 @@ class ConstrainedMiniballSolver {
 
   public:
 	// Initialise the helper with the affine constraint Ax = b.
-	template <RealMatrixExpr<Gmpzf> points_t, RealMatrixExpr<Gmpzf> A_t, RealVectorExpr<Gmpzf> b_t>
+	template <RealMatrixExpr<Mpzf> points_t, RealMatrixExpr<Mpzf> A_t, RealVectorExpr<Mpzf> b_t>
 	ConstrainedMiniballSolver(const points_t& points, const A_t& A, const b_t& b) :
 		m_points(points.eval()),
 		m_A(A.eval()),
@@ -252,56 +253,109 @@ class ConstrainedMiniballSolver {
 }  // namespace detail
 
 namespace utility {
+
 // NOLINTBEGIN(cppcoreguidelines-pro-bounds-array-to-pointer-decay)
-// Class to perform weakly monotonic conversion from CGAL::Quotient<CGAL::Gmpzf> to double.
-class ToDouble {
+
+template <typename From, typename To> class TypeConverter {};
+
+template <typename T> class TypeConverter<T, T> {
+  public:
+	auto operator()(const T& x) -> T {
+		return x;
+	}
+};
+
+template <> class TypeConverter<SolutionExactType, mpq_class> {
+	mpq_t m_numerator;
+	mpq_t m_denominator;
 	mpq_t m_value;
 
   public:
-	ToDouble() {  // NOLINT(cppcoreguidelines-pro-type-member-init)
-		mpq_init(m_value);
+	TypeConverter() {  // NOLINT(cppcoreguidelines-pro-type-member-init)
+		mpq_inits(m_numerator, m_denominator, m_value, NULL);
 	}
 
-	auto operator()(const CGAL::Quotient<CGAL::Gmpzf>& x) -> double {
-		const CGAL::Gmpzf& num = x.numerator();
-		const CGAL::Gmpzf& den = x.denominator();
-
-		auto num_man = num.man();
-		auto num_exp = num.exp();
-
-		auto den_man = den.man();
-		auto den_exp = den.exp();
-
-		// The value is (num.man / den.man) * 2^(num.exp - den.exp).
-		// We compute this using GMP's rational numbers for exactness.
-
-		mpq_set_num(m_value, num_man);
-		mpq_set_den(m_value, den_man);
-
-		auto exp_diff = num_exp - den_exp;
-
-		if (exp_diff > 0) {
-			mpq_mul_2exp(m_value, m_value, exp_diff);
-		} else if (exp_diff < 0) {
-			mpq_div_2exp(m_value, m_value, -exp_diff);
-		}
-
-		double result = mpq_get_d(m_value);
-
-		return result;
+	auto operator()(const SolutionExactType& x) -> mpq_class {
+		mpq_set_ui(m_numerator, 0, 1);
+		mpq_set_ui(m_denominator, 0, 1);
+		x.numerator().export_to_mpq_t(m_numerator);
+		x.denominator().export_to_mpq_t(m_denominator);
+		mpq_div(m_value, m_numerator, m_denominator);
+		return mpq_class(m_value);
 	}
 
-	~ToDouble() {
-		mpq_clear(m_value);
+	~TypeConverter() {
+		mpq_clears(m_numerator, m_denominator, m_value, NULL);
 	}
 
-	ToDouble(const ToDouble&)       = delete;
-	ToDouble(ToDouble&&)            = delete;
-	void operator=(const ToDouble&) = delete;
-	void operator=(ToDouble&&)      = delete;
+	TypeConverter(const TypeConverter&)  = delete;
+	TypeConverter(TypeConverter&&)       = delete;
+	void operator=(const TypeConverter&) = delete;
+	void operator=(TypeConverter&&)      = delete;
+};
+
+template <> class TypeConverter<mpq_class, double> {
+  public:
+	auto operator()(const mpq_class& x) -> double {
+		return x.get_d();
+	}
+};
+
+template <>
+class TypeConverter<SolutionExactType, double> : public TypeConverter<SolutionExactType, mpq_class>,
+												 public TypeConverter<mpq_class, double> {
+  public:
+	auto operator()(const SolutionExactType& x) -> double {
+		return TypeConverter<mpq_class, double>::operator()(
+			TypeConverter<SolutionExactType, mpq_class>::operator()(x)
+		);
+	}
+};
+
+template <> class TypeConverter<CGAL::Mpzf, SolutionExactType> {
+  public:
+	auto operator()(const CGAL::Mpzf& x) -> SolutionExactType {
+		return {x};
+	}
+};
+
+template <> class TypeConverter<CGAL::Mpzf, mpq_class> {
+  public:
+	auto operator()(const CGAL::Mpzf& x) -> mpq_class {
+		return mpq_class(x);
+	}
+};
+
+template <> class TypeConverter<CGAL::Mpzf, double> {
+  public:
+	auto operator()(const CGAL::Mpzf& x) -> double {
+		return x.to_double();
+	}
+};
+
+template <> class TypeConverter<double, CGAL::Mpzf> {
+  public:
+	auto operator()(const double& x) -> CGAL::Mpzf {
+		return {x};
+	}
+};
+
+template <> class TypeConverter<double, mpq_class> {
+  public:
+	auto operator()(const double& x) -> mpq_class {
+		return {x};
+	}
+};
+
+template <> class TypeConverter<double, SolutionExactType> {
+  public:
+	auto operator()(const double& x) -> SolutionExactType {
+		return {CGAL::Mpzf(x)};
+	}
 };
 
 // NOLINTEND(cppcoreguidelines-pro-bounds-array-to-pointer-decay)
+
 template <detail::MatrixExpr T>
 auto equidistant_subspace(const T& X)
 	-> std::tuple<detail::RealMatrix<typename T::Scalar>, detail::RealVector<typename T::Scalar>> {
@@ -352,12 +406,12 @@ template <
 auto constrained_miniball(const X_t& points, const A_t& A, const b_t& b)
 	-> std::tuple<detail::RealVector<SolutionType<S>>, SolutionType<S>, bool> {
 	using detail::ConstrainedMiniballSolver;
-	using detail::Gmpzf;
 	using detail::Index;
+	using detail::Mpzf;
 	using detail::VectorXd;
 	using std::tuple;
 	using std::vector;
-	using utility::ToDouble;
+	using utility::TypeConverter;
 
 	using Real_t = X_t::Scalar;
 	assert(A.rows() == b.rows() && "A.rows() != b.rows()");
@@ -369,14 +423,14 @@ auto constrained_miniball(const X_t& points, const A_t& A, const b_t& b)
 
 	// Get the result
 	ConstrainedMiniballSolver solver(
-		points.template cast<Gmpzf>(),
-		A.template cast<Gmpzf>(),
-		b.template cast<Gmpzf>()
+		points.template cast<Mpzf>(),
+		A.template cast<Mpzf>(),
+		b.template cast<Mpzf>()
 	);
 	if constexpr (S == SolutionPrecision::EXACT) {
 		return solver.solve(X_idx);
 	} else {
-		auto to_double                   = ToDouble();
+		thread_local TypeConverter<SolutionExactType, double> to_double;
 		auto [centre, sqRadius, success] = solver.solve(X_idx);
 		VectorXd centre_d(points.rows());
 		for (int i = 0; i < points.rows(); i++) {

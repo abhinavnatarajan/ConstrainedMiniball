@@ -38,6 +38,7 @@
 #include <Eigen/Dense>
 
 #include <CGAL/Quotient.h>
+#include <CGAL/Mpzf.h>
 
 #include <cmath>
 #include <iomanip>
@@ -48,10 +49,6 @@
 namespace cmb::test {
 
 using Eigen::NoChange, Eigen::all, Eigen::MatrixXd, Eigen::VectorXd;
-
-inline auto operator<<(std::ostream& s, const CGAL::Quotient<CGAL::Gmpzf>& r) -> std::ostream& {
-	return CGAL::print(CGAL::print(s, r.numerator()) << " / ", r.denominator());
-}
 
 template <typename T>
 auto approx_equal(const T& a, const T& b, const T& rel_tol, const T& abs_tol) -> bool {
@@ -75,27 +72,17 @@ void run_test(
 	using input_t = T;
 	// solution will never be downcast, only upcast
 	// common_t = (soln_t <= input_t) ? input_t : soln_t;
-	// where input_t is one of double, CGAL::Gmpzf
-	// soln_t is one of double, CGAL::Quotient<CGAL::Gmpzf>
+	// where input_t is one of double, CGAL::Mpzf
+	// soln_t is one of double, CGAL::Quotient<CGAL::Mpzf>
 	using common_t = std::conditional_t<S == SolutionPrecision::DOUBLE, input_t, soln_t>;
+	cmb::utility::TypeConverter<soln_t, common_t> soln_to_common;
+	cmb::utility::TypeConverter<input_t, common_t> input_to_common;
 	using std::cerr, std::endl;
 
 	cerr << std::setprecision(std::numeric_limits<double>::max_digits10);
-	// cerr << "X :" << endl;
-	// cerr << X << endl;
-	// cerr << "A :" << endl;
-	// cerr << A << endl;
-	// cerr << "b^T :" << endl;
-	// cerr << b.transpose().eval() << endl;
 	auto [centre, sqRadius, success] = constrained_miniball<S>(X, A, b);
 
 	cerr << "Solution found : " << (success ? "true" : "false") << endl;
-
-	// cerr << "Expected centre :" << endl;
-	// cerr << correct_centre.transpose().eval() << endl;
-
-	// cerr << "Centre :" << endl;
-	// cerr << centre.transpose().eval() << endl;
 
 	cerr << "Error in centre (squared norm) :" << endl;
 	common_t err_centre =
