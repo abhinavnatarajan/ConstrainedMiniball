@@ -68,9 +68,11 @@ using CGAL::Mpzf;  // exact floats
 using std::tuple, std::max, std::vector, Eigen::MatrixBase, Eigen::Matrix, Eigen::Vector,
 	Eigen::MatrixXd, Eigen::VectorXd, Eigen::Index, std::same_as;
 
-template <class Real_t> using RealVector = Matrix<Real_t, Eigen::Dynamic, 1>;
+template <class Real_t, const int Rows = Eigen::Dynamic, const int Cols = Eigen::Dynamic>
+using RealMatrix = Matrix<Real_t, Rows, Cols>;
 
-template <class Real_t> using RealMatrix = Matrix<Real_t, Eigen::Dynamic, Eigen::Dynamic>;
+template <class Real_t, const int Rows = Eigen::Dynamic>
+using RealVector = RealMatrix<Real_t, Rows, 1>;
 
 template <class Derived>
 concept MatrixExpr = requires { typename MatrixBase<Derived>; };
@@ -83,6 +85,13 @@ concept RealMatrixExpr = MatrixExpr<Derived> && same_as<typename Derived::Scalar
 
 template <class Derived, class Real_t>
 concept RealVectorExpr = VectorExpr<Derived> && same_as<typename Derived::Scalar, Real_t>;
+
+template <class T, class S>
+concept CanMultiply =
+	MatrixExpr<T> && MatrixExpr<S> &&
+	(T::ColsAtCompileTime == S::RowsAtCompileTime || T::ColsAtCompileTime == Eigen::Dynamic ||
+     S::RowsAtCompileTime == Eigen::Dynamic) &&
+	same_as<typename T::Scalar, typename S::Scalar>;
 
 using QuadraticProgram         = CGAL::Quadratic_program<Mpzf>;
 using QuadraticProgramSolution = CGAL::Quadratic_program_solution<Mpzf>;
@@ -357,20 +366,27 @@ template <> class TypeConverter<double, SolutionExactType> {
 // NOLINTEND(cppcoreguidelines-pro-bounds-array-to-pointer-decay)
 
 template <detail::MatrixExpr T>
-auto equidistant_subspace(const T& X)
-	-> std::tuple<detail::RealMatrix<typename T::Scalar>, detail::RealVector<typename T::Scalar>> {
+auto equidistant_subspace(const T& X) -> std::tuple<
+	detail::RealMatrix<
+		typename T::Scalar,
+		(T::ColsAtCompileTime > 0 ? T::ColsAtCompileTime - 1 : Eigen::Dynamic),
+		T::RowsAtCompileTime>,
+	detail::RealVector<typename T::Scalar>> {
 	using detail::RealMatrix;
 	using detail::RealVector;
 	using std::tuple;
-	using Real_t         = T::Scalar;
-	int                n = X.cols();
-	RealMatrix<Real_t> E(n - 1, X.rows());
-	RealVector<Real_t> b(n - 1);
+	using Real_t                                               = T::Scalar;
+	constexpr auto Rows = (T::ColsAtCompileTime > 0 ? T::ColsAtCompileTime - 1 : Eigen::Dynamic);
+	constexpr auto Cols = T::RowsAtCompileTime;
+	int                                                      n = X.cols();
+	RealMatrix<Real_t, Rows, Cols> E(n - 1, X.rows());
+	RealVector<Real_t>                                       b(n - 1);
+	auto                                                     X_cast = X.template cast<Real_t>();
 	if (n > 1) {
 		b = static_cast<Real_t>(0.5) *
-		    (X.rightCols(n - 1).colwise().squaredNorm().array() - X.col(0).squaredNorm())
+		    (X_cast.rightCols(n - 1).colwise().squaredNorm().array() - X_cast.col(0).squaredNorm())
 		        .transpose();
-		E = (X.rightCols(n - 1).colwise() - X.col(0)).transpose();
+		E = (X_cast.rightCols(n - 1).colwise() - X_cast.col(0)).transpose();
 	}
 	return tuple{E, b};
 }
@@ -402,9 +418,10 @@ template <
 	detail::MatrixExpr A_t,
 	detail::VectorExpr b_t>
 	requires std::same_as<typename X_t::Scalar, typename A_t::Scalar> &&
-             std::same_as<typename A_t::Scalar, typename b_t::Scalar>
-auto constrained_miniball(const X_t& points, const A_t& A, const b_t& b)
-	-> std::tuple<detail::RealVector<SolutionType<S>>, SolutionType<S>, bool> {
+             std::same_as<typename A_t::Scalar, typename b_t::Scalar> &&
+             detail::CanMultiply<A_t, X_t> && detail::CanMultiply<A_t, b_t>
+auto constrained_miniball(const X_t& points, const A_t& A, const b_t& b) -> std::
+	tuple<detail::RealVector<SolutionType<S>, X_t::RowsAtCompileTime>, SolutionType<S>, bool> {
 	using detail::ConstrainedMiniballSolver;
 	using detail::Index;
 	using detail::Mpzf;
