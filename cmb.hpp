@@ -480,8 +480,8 @@ auto miniball(const X_t& X)
 	using detail::Matrix;
 	using detail::Vector;
 	using Real_t = X_t::Scalar;
-	using Mat    = Matrix<Real_t, Eigen::Dynamic, Eigen::Dynamic>;
-	using Vec    = Vector<Real_t, Eigen::Dynamic>;
+	using Mat    = Matrix<Real_t, 0, X_t::RowsAtCompileTime>;
+	using Vec    = Vector<Real_t, X_t::RowsAtCompileTime>;
 	return constrained_miniball<S>(X, Mat(0, X.rows()), Vec(0));
 }
 
