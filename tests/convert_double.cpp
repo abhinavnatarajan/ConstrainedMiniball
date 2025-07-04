@@ -45,8 +45,6 @@ auto main() -> int {
 	// Numerator of a
 	TypeConverter<Mpzf, mpq_class>                Mpzf_to_mpq;
 	TypeConverter<cmb::SolutionExactType, double> Quotient_to_double;
-	auto                                          Quotient_to_mpq =
-		static_cast<TypeConverter<cmb::SolutionExactType, mpq_class>*>(&Quotient_to_double);
 	auto num_a_base_str = std::stringstream(
 		"495465331884540240762104420639278860096116250934219950844827973437034498625"
 	);  //*2^-379
@@ -74,7 +72,7 @@ auto main() -> int {
 
 	auto a = cmb::SolutionExactType(num_a, denom_a), b = cmb::SolutionExactType(num_b, denom_b);
 	auto a_d = Quotient_to_double(a), b_d = Quotient_to_double(b);
-	std::cout << "a = " << (*Quotient_to_mpq)(a) << ", b = " << (*Quotient_to_mpq)(b) << '\n';
+	std::cout << "a = " << Quotient_to_double.get_mpq_t(a) << ", b = " << Quotient_to_double.get_mpq_t(b) << '\n';
 	std::cout << "double(a) = " << a_d << ", double(b) = " << b_d << '\n';
 	std::cout << "a > b: " << (a > b ? "True" : "False") << '\n';
 	std::cout << "a_d >= b_d: " << (a_d >= b_d ? "True" : "False") << '\n';

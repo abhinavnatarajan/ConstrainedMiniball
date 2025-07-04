@@ -274,7 +274,7 @@ template <typename T> class TypeConverter<T, T> {
 	}
 };
 
-template <> class TypeConverter<SolutionExactType, mpq_class> {
+template <> class TypeConverter<SolutionExactType, double> {
 	mpq_t m_numerator;
 	mpq_t m_denominator;
 	mpq_t m_value;
@@ -284,13 +284,17 @@ template <> class TypeConverter<SolutionExactType, mpq_class> {
 		mpq_inits(m_numerator, m_denominator, m_value, NULL);
 	}
 
-	auto operator()(const SolutionExactType& x) -> mpq_class {
+	auto operator()(const SolutionExactType& x) -> double {
+		return mpq_get_d(get_mpq_t(x));
+	}
+
+	auto get_mpq_t(const SolutionExactType& x) -> mpq_ptr {
 		mpq_set_ui(m_numerator, 0, 1);
 		mpq_set_ui(m_denominator, 0, 1);
 		x.numerator().export_to_mpq_t(m_numerator);
 		x.denominator().export_to_mpq_t(m_denominator);
 		mpq_div(m_value, m_numerator, m_denominator);
-		return mpq_class(m_value);
+		return m_value;
 	}
 
 	~TypeConverter() {
@@ -303,21 +307,10 @@ template <> class TypeConverter<SolutionExactType, mpq_class> {
 	void operator=(TypeConverter&&)      = delete;
 };
 
-template <> class TypeConverter<mpq_class, double> {
+template <> class TypeConverter<double, SolutionExactType> {
   public:
-	auto operator()(const mpq_class& x) -> double {
-		return x.get_d();
-	}
-};
-
-template <>
-class TypeConverter<SolutionExactType, double> : public TypeConverter<SolutionExactType, mpq_class>,
-												 public TypeConverter<mpq_class, double> {
-  public:
-	auto operator()(const SolutionExactType& x) -> double {
-		return TypeConverter<mpq_class, double>::operator()(
-			TypeConverter<SolutionExactType, mpq_class>::operator()(x)
-		);
+	auto operator()(const double& x) -> SolutionExactType {
+		return {CGAL::Mpzf(x)};
 	}
 };
 
@@ -328,6 +321,7 @@ template <> class TypeConverter<CGAL::Mpzf, SolutionExactType> {
 	}
 };
 
+// Useful for printing CGAL::Mpzf values exactly.
 template <> class TypeConverter<CGAL::Mpzf, mpq_class> {
   public:
 	auto operator()(const CGAL::Mpzf& x) -> mpq_class {
@@ -349,20 +343,6 @@ template <> class TypeConverter<double, CGAL::Mpzf> {
 	}
 };
 
-template <> class TypeConverter<double, mpq_class> {
-  public:
-	auto operator()(const double& x) -> mpq_class {
-		return {x};
-	}
-};
-
-template <> class TypeConverter<double, SolutionExactType> {
-  public:
-	auto operator()(const double& x) -> SolutionExactType {
-		return {CGAL::Mpzf(x)};
-	}
-};
-
 // NOLINTEND(cppcoreguidelines-pro-bounds-array-to-pointer-decay)
 
 template <detail::MatrixExpr T>
@@ -375,13 +355,13 @@ auto equidistant_subspace(const T& X) -> std::tuple<
 	using detail::RealMatrix;
 	using detail::RealVector;
 	using std::tuple;
-	using Real_t                                               = T::Scalar;
+	using Real_t        = T::Scalar;
 	constexpr auto Rows = (T::ColsAtCompileTime > 0 ? T::ColsAtCompileTime - 1 : Eigen::Dynamic);
 	constexpr auto Cols = T::RowsAtCompileTime;
-	int                                                      n = X.cols();
+	int            n    = X.cols();
 	RealMatrix<Real_t, Rows, Cols> E(n - 1, X.rows());
-	RealVector<Real_t>                                       b(n - 1);
-	auto                                                     X_cast = X.template cast<Real_t>();
+	RealVector<Real_t>             b(n - 1);
+	auto                           X_cast = X.template cast<Real_t>();
 	if (n > 1) {
 		b = static_cast<Real_t>(0.5) *
 		    (X_cast.rightCols(n - 1).colwise().squaredNorm().array() - X_cast.col(0).squaredNorm())

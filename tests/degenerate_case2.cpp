@@ -15,21 +15,21 @@ auto main(int /*argc*/, char* /*argv*/[]) -> int {
 	};
 
 	cmb::utility::TypeConverter<cmb::SolutionExactType, double> to_double;
-	auto                                                        to_mpq =
-		static_cast<cmb::utility::TypeConverter<cmb::SolutionExactType, mpq_class>*>(&to_double);
 	auto&& [centre, sq_radius, success] = cmb::miniball<cmb::SolutionPrecision::EXACT>(X);
 	cerr << std::setprecision(std::numeric_limits<double>::max_digits10) << '\n';
 	// cerr << "Centre of the bounding sphere of the triangle: " << centre.template
 	// cast<double>().transpose() << '\n';
-	cerr << "Squared radius of the bounding sphere of the triangle: " << (*to_mpq)(sq_radius)
-		 << " (exact) " << to_double(sq_radius) << " (double)" << '\n';
+	cerr << "Squared radius of the bounding sphere of the triangle: "
+		 << to_double.get_mpq_t(sq_radius) << " (exact) " << to_double(sq_radius) << " (double)"
+		 << '\n';
 
 	auto&& [centre1, sq_radius1, success1] =
 		cmb::miniball<cmb::SolutionPrecision::EXACT>(X(Eigen::all, {1, 2}));
 	// cerr << "Centre of the bounding sphere of the diameter line: " << centre1.template
 	// cast<double>().transpose() << '\n';
-	cerr << "Squared radius of the bounding sphere of the diameter line: " << (*to_mpq)(sq_radius1)
-		 << " (exact) " << to_double(sq_radius1) << " (double)" << '\n';
+	cerr << "Squared radius of the bounding sphere of the diameter line: "
+		 << to_double.get_mpq_t(sq_radius1) << " (exact) " << to_double(sq_radius1) << " (double)"
+		 << '\n';
 
 	assert(
 		sq_radius1 <= sq_radius &&
