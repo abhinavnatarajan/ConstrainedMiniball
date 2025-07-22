@@ -252,7 +252,7 @@ class ConstrainedMiniballSolver {
 			std::tie(centre, sqRadius, success) = solve(X_idx);
 			// Undo the addition of the last point.
 			// This matters in nested calls to this function
-			// because we assume that the function does not mutate its arguments.
+			// because we assume that the function does not mutate its arguments or self.
 			remove_last_point();
 		}
 		X_idx.push_back(i);
@@ -419,14 +419,14 @@ auto constrained_miniball(const X_t& points, const A_t& A, const b_t& b) -> std:
 
 	// Get the result
 	ConstrainedMiniballSolver solver(
-		points.template cast<Mpzf>(),
-		A.template cast<Mpzf>(),
-		b.template cast<Mpzf>()
+		points.template cast<Mpzf>().eval(),
+		A.template cast<Mpzf>().eval(),
+		b.template cast<Mpzf>().eval()
 	);
 	if constexpr (S == SolutionPrecision::EXACT) {
 		return solver.solve(X_idx);
 	} else {
-		thread_local TypeConverter<SolutionExactType, double> to_double;
+		TypeConverter<SolutionExactType, double> to_double;
 		auto [centre, sqRadius, success] = solver.solve(X_idx);
 		VectorXd centre_d(points.rows());
 		for (int i = 0; i < points.rows(); i++) {
