@@ -241,7 +241,7 @@ class ConstrainedMiniballSolver {
 		Index i = X_idx.back();
 		X_idx.pop_back();
 		auto&& [centre, sqRadius, success] = solve(X_idx);
-		auto&& sqDistance =
+		auto sqDistance =
 			(m_points.col(i).template cast<SolutionExactType>() - centre).squaredNorm();
 		if (sqDistance > sqRadius) {
 			// If the last point does not lie in the computed bounding ball,
@@ -256,6 +256,66 @@ class ConstrainedMiniballSolver {
 			remove_last_point();
 		}
 		X_idx.push_back(i);
+		return tuple{centre, sqRadius, success};
+	}
+
+	// Non-recursive version of the solve function.
+	// This is slightly faster, but less readable than "solve".
+	// Please see "solve" for how this actually works.
+	auto solve_iterative(vector<Index>& X_idx)
+		-> tuple<RealVector<SolutionExactType>, SolutionExactType, bool> {
+		SolutionExactType             sqRadius, sqDistance;
+		RealVector<SolutionExactType> centre;
+		bool                          success = false;
+		vector<Index>                 i_vec;
+		vector<char>                  instructions_stack;
+		i_vec.reserve(X_idx.size() + 1);
+		instructions_stack.reserve(X_idx.size() + 1);
+
+		instructions_stack.push_back(0);
+		while (!instructions_stack.empty()) {
+			auto instruction = instructions_stack.back();
+			instructions_stack.pop_back();
+
+			switch (instruction) {
+				case 0 : {
+					if (X_idx.empty() || subspace_rank_lb() == 0) {
+						std::tie(centre, sqRadius, success) = solve_intermediate();
+						break;
+					}
+					i_vec.push_back(X_idx.back());
+					X_idx.pop_back();
+					instructions_stack.push_back(1);
+					instructions_stack.push_back(0);
+					break;
+				}
+				case 1 : {
+					sqDistance =
+						(m_points.col(i_vec.back()).template cast<SolutionExactType>() - centre)
+							.squaredNorm();
+					if (sqDistance > sqRadius) {
+						add_point(i_vec.back());
+						instructions_stack.push_back(2);
+						instructions_stack.push_back(0);
+						break;
+					}
+					instructions_stack.push_back(3);
+					break;
+				}
+				case 2 : {
+					remove_last_point();
+					instructions_stack.push_back(3);
+					break;
+				}
+				case 3 : {
+					X_idx.push_back(i_vec.back());
+					i_vec.pop_back();
+					break;
+				}
+				default :
+					break;
+			}
+		}
 		return tuple{centre, sqRadius, success};
 	}
 };
@@ -424,10 +484,10 @@ auto constrained_miniball(const X_t& points, const A_t& A, const b_t& b) -> std:
 		b.template cast<Mpzf>().eval()
 	);
 	if constexpr (S == SolutionPrecision::EXACT) {
-		return solver.solve(X_idx);
+		return solver.solve_iterative(X_idx);
 	} else {
 		TypeConverter<SolutionExactType, double> to_double;
-		auto [centre, sqRadius, success] = solver.solve(X_idx);
+		auto [centre, sqRadius, success] = solver.solve_iterative(X_idx);
 		VectorXd centre_d(points.rows());
 		for (int i = 0; i < points.rows(); i++) {
 			centre_d[i] = to_double(centre(i));
