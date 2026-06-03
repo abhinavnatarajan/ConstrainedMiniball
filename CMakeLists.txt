@@ -25,25 +25,30 @@ project(ConstrainedMiniball LANGUAGES CXX)
 include(CTest)
 
 find_package(Eigen3 CONFIG REQUIRED)
-if (Eigen3_FOUND)
-	message(STATUS "Found Eigen3 headers in: ${EIGEN3_INCLUDE_DIR}")
+if(Eigen3_FOUND)
+    message(STATUS "Found Eigen3 headers in: ${EIGEN3_INCLUDE_DIR}")
 endif()
 
 find_package(CGAL CONFIG REQUIRED)
-if (DEFINED CGAL_MODULES_DIR AND Eigen3_FOUND)
+if(DEFINED CGAL_MODULES_DIR AND Eigen3_FOUND)
     include(${CGAL_MODULES_DIR}/CGAL_Eigen3_support.cmake)
     message(STATUS "CGAL has Eigen3 support.")
 endif()
 
 add_executable(example example.cpp)
-target_link_libraries(example PRIVATE Eigen3::Eigen CGAL::CGAL CGAL::Eigen3_support)
+target_link_libraries(
+    example
+    PRIVATE Eigen3::Eigen CGAL::CGAL CGAL::Eigen3_support
+)
 
 file(GLOB test_files tests/*.cpp)
 foreach(file ${test_files})
     get_filename_component(name ${file} NAME_WE)
     add_executable(${name} ${file})
-    target_link_libraries(${name} PRIVATE Eigen3::Eigen CGAL::CGAL CGAL::Eigen3_support)
+    target_link_libraries(
+        ${name}
+        PRIVATE Eigen3::Eigen CGAL::CGAL CGAL::Eigen3_support
+    )
     add_test(NAME "${name} EXACT" COMMAND ${name} "EXACT")
     add_test(NAME "${name} DOUBLE" COMMAND ${name} "DOUBLE")
 endforeach()
-
